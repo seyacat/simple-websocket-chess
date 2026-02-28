@@ -126,8 +126,8 @@ export const useGameStore = defineStore('game', () => {
     selectedPiece.value = null
     validMoves.value = []
     
-    // Enviar movimiento al oponente si estamos conectados
-    if (connectionStore.canPlay && connectionStore.opponentToken) {
+    // Enviar movimiento al oponente según el modo
+    if (connectionStore.isConnected) {
       const moveData = {
         from: { row: fromRow, col: fromCol },
         to: { row: toRow, col: toCol },
@@ -135,13 +135,25 @@ export const useGameStore = defineStore('game', () => {
         timestamp: Date.now()
       }
       
-      wsService.sendGameMessage(
-        connectionStore.opponentToken,
-        'MOVE',
-        moveData
-      ).catch(error => {
-        console.error('Error enviando movimiento:', error)
-      })
+      if (isHost.value) {
+        // Host envía broadcast a todos los subscribers
+        wsService.sendGameMessage(
+          connectionStore.shortToken, // Enviar a sí mismo para broadcast
+          'MOVE',
+          moveData
+        ).catch(error => {
+          console.error('Error enviando movimiento (broadcast):', error)
+        })
+      } else if (connectionStore.isGuest && connectionStore.subscribedHost) {
+        // Guest envía mensaje directo al host
+        wsService.sendGameMessage(
+          connectionStore.subscribedHost,
+          'MOVE',
+          moveData
+        ).catch(error => {
+          console.error('Error enviando movimiento (directo):', error)
+        })
+      }
     }
     
     // Verificar estado del juego
@@ -221,16 +233,19 @@ export const useGameStore = defineStore('game', () => {
     validMoves.value = []
     moveHistory.value = []
     
-    // Si es host, notificar al guest
-    if (asHost && connectionStore.canPlay && connectionStore.opponentToken) {
+    // Si es host, notificar a todos los guests via broadcast
+    if (asHost && connectionStore.isHost && connectionStore.hasSubscribers) {
       const gameStartData = {
         color: color === 'white' ? 'black' : 'white', // El oponente tiene el color opuesto
         timestamp: Date.now(),
         isHost: false
       }
       
+      // Enviar broadcast a todos los subscribers
+      // En el nuevo protocolo, cuando un host envía un mensaje a su propio token,
+      // se envía como broadcast a todos sus subscribers
       wsService.sendGameMessage(
-        connectionStore.opponentToken,
+        connectionStore.shortToken, // Enviar a sí mismo para broadcast
         'GAME_START',
         gameStartData
       )
@@ -261,20 +276,62 @@ export const useGameStore = defineStore('game', () => {
 
   // Inicializar listeners para mensajes WebSocket
   function initWebSocketListeners() {
-    wsService.on('MOVE', (data) => {
-      console.log('Movimiento remoto recibido:', data)
-      applyRemoteMove(data)
+    // Handler para mensajes broadcast (del host)
+    wsService.on('broadcast_message', (data) => {
+      console.log('Mensaje broadcast recibido:', data)
+      
+      // Parsear el mensaje
+      const [type, jsonData] = data.message.split('|')
+      const parsedData = JSON.parse(jsonData)
+      
+      switch (type) {
+        case 'GAME_START':
+          console.log('Juego iniciado por host:', parsedData)
+          joinGame(parsedData.color)
+          break
+          
+        case 'MOVE':
+          console.log('Movimiento remoto recibido del host:', parsedData)
+          applyRemoteMove(parsedData)
+          break
+          
+        case 'GAME_END':
+          console.log('Juego terminado:', parsedData)
+          gameStatus.value = 'finished'
+          // TODO: Mostrar resultado
+          break
+          
+        default:
+          console.log('Tipo de mensaje broadcast no reconocido:', type)
+      }
     })
     
-    wsService.on('GAME_START', (data) => {
-      console.log('Juego iniciado por host:', data)
-      joinGame(data.color)
+    // Handler para mensajes directos (del guest al host)
+    wsService.on('message', (data) => {
+      console.log('Mensaje directo recibido:', data)
+      
+      // Parsear el mensaje
+      const [type, jsonData] = data.message.split('|')
+      const parsedData = JSON.parse(jsonData)
+      
+      switch (type) {
+        case 'MOVE':
+          console.log('Movimiento remoto recibido del guest:', parsedData)
+          applyRemoteMove(parsedData)
+          break
+          
+        default:
+          console.log('Tipo de mensaje directo no reconocido:', type)
+      }
     })
     
-    wsService.on('GAME_END', (data) => {
-      console.log('Juego terminado:', data)
-      gameStatus.value = 'finished'
-      // TODO: Mostrar resultado
+    // Handler para desconexión del host
+    wsService.on('host_disconnected', (data) => {
+      console.log('Host desconectado:', data)
+      if (!isHost.value) {
+        gameStatus.value = 'finished'
+        // TODO: Mostrar mensaje de desconexión
+      }
     })
   }
 

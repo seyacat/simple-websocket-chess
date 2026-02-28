@@ -49,6 +49,55 @@ class WebSocketService {
       console.log('Mensaje enviado confirmado:', data)
       this.emit('message_sent', data)
     })
+
+    // Handler para confirmación de modo
+    this.on('mode_set', (data) => {
+      console.log('Modo establecido:', data)
+      this.connectionStore.setMode(data.mode, data.visibility)
+      this.emit('mode_set', data)
+    })
+
+    // Handler para lista de hosts públicos
+    this.on('public_hosts_list', (data) => {
+      console.log('Lista de hosts públicos recibida:', data)
+      this.connectionStore.setPublicHosts(data.hosts || [])
+      this.connectionStore.updateLastPublicHostsUpdate()
+      this.emit('public_hosts_list', data)
+    })
+
+    // Handler para confirmación de suscripción
+    this.on('subscribed', (data) => {
+      console.log('Suscripción exitosa:', data)
+      this.connectionStore.setSubscribedHost(data.to)
+      this.emit('subscribed', data)
+    })
+
+    // Handler para nuevo subscriber (solo para hosts)
+    this.on('new_subscriber', (data) => {
+      console.log('Nuevo subscriber:', data)
+      this.connectionStore.addSubscriber(data.guest)
+      this.emit('new_subscriber', data)
+    })
+
+    // Handler para subscriber desconectado (solo para hosts)
+    this.on('subscriber_disconnected', (data) => {
+      console.log('Subscriber desconectado:', data)
+      this.connectionStore.removeSubscriber(data.guest)
+      this.emit('subscriber_disconnected', data)
+    })
+
+    // Handler para host desconectado (solo para guests)
+    this.on('host_disconnected', (data) => {
+      console.log('Host desconectado:', data)
+      this.connectionStore.setSubscribedHost(null)
+      this.emit('host_disconnected', data)
+    })
+
+    // Handler para mensajes broadcast
+    this.on('broadcast_message', (data) => {
+      console.log('Mensaje broadcast recibido:', data)
+      this.emit('broadcast_message', data)
+    })
   }
 
   connect() {
@@ -178,6 +227,98 @@ class WebSocketService {
   sendGameMessage(to, type, data) {
     const message = `${type}|${JSON.stringify(data)}`
     return this.sendMessage(to, message)
+  }
+
+  // Métodos para nuevo protocolo de lobby
+  setMode(mode, visibility = null) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket no está conectado')
+      return Promise.reject(new Error('WebSocket no está conectado'))
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const payload = {
+          type: 'set_mode',
+          mode,
+          ...(visibility && { visibility })
+        }
+        
+        this.ws.send(JSON.stringify(payload))
+        console.log('Modo establecido enviado:', payload)
+        resolve()
+      } catch (error) {
+        console.error('Error estableciendo modo:', error)
+        reject(error)
+      }
+    })
+  }
+
+  listPublicHosts() {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket no está conectado')
+      return Promise.reject(new Error('WebSocket no está conectado'))
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const payload = {
+          type: 'list_public_hosts'
+        }
+        
+        this.ws.send(JSON.stringify(payload))
+        console.log('Solicitud de hosts públicos enviada')
+        resolve()
+      } catch (error) {
+        console.error('Error solicitando hosts públicos:', error)
+        reject(error)
+      }
+    })
+  }
+
+  subscribeToHost(hostToken) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket no está conectado')
+      return Promise.reject(new Error('WebSocket no está conectado'))
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const payload = {
+          type: 'subscribe',
+          to: hostToken
+        }
+        
+        this.ws.send(JSON.stringify(payload))
+        console.log('Suscripción enviada:', payload)
+        resolve()
+      } catch (error) {
+        console.error('Error suscribiéndose a host:', error)
+        reject(error)
+      }
+    })
+  }
+
+  unsubscribe() {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket no está conectado')
+      return Promise.reject(new Error('WebSocket no está conectado'))
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const payload = {
+          type: 'unsubscribe'
+        }
+        
+        this.ws.send(JSON.stringify(payload))
+        console.log('Desuscripción enviada')
+        resolve()
+      } catch (error) {
+        console.error('Error desuscribiéndose:', error)
+        reject(error)
+      }
+    })
   }
 
   disconnect() {
