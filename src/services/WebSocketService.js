@@ -1,0 +1,235 @@
+import { useConnectionStore } from '@/stores/connectionStore'
+
+class WebSocketService {
+  constructor() {
+    this.ws = null
+    this.reconnectAttempts = 0
+    this.maxReconnectAttempts = parseInt(import.meta.env.VITE_WS_MAX_RECONNECT_ATTEMPTS) || 5
+    this.reconnectDelay = parseInt(import.meta.env.VITE_WS_RECONNECT_DELAY) || 3000
+    this.reconnectTimer = null
+    this.messageHandlers = new Map()
+    
+    this.connectionStore = useConnectionStore()
+    
+    // Registrar handlers por defecto
+    this.registerDefaultHandlers()
+  }
+
+  registerDefaultHandlers() {
+    // Handler para mensajes de conexión establecida
+    this.on('connection_established', (data) => {
+      console.log('Conexión WebSocket establecida:', data)
+      
+      this.connectionStore.setUuid(data.uuid)
+      this.connectionStore.setShortToken(data.shortToken)
+      this.connectionStore.setConnected(true)
+      this.connectionStore.clearError()
+      
+      this.reconnectAttempts = 0
+      
+      // Notificar a otros componentes
+      this.emit('connected', data)
+    })
+
+    // Handler para mensajes de error
+    this.on('error', (data) => {
+      console.error('Error del servidor WebSocket:', data)
+      this.connectionStore.setError(data.error || 'Error desconocido')
+      this.emit('error', data)
+    })
+
+    // Handler para mensajes normales
+    this.on('message', (data) => {
+      console.log('Mensaje recibido:', data)
+      this.emit('message', data)
+    })
+
+    // Handler para confirmación de envío
+    this.on('message_sent', (data) => {
+      console.log('Mensaje enviado confirmado:', data)
+      this.emit('message_sent', data)
+    })
+  }
+
+  connect() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log('WebSocket ya está conectado')
+      return Promise.resolve()
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const url = this.buildWebSocketUrl()
+        console.log('Conectando a WebSocket:', url)
+        
+        this.ws = new WebSocket(url)
+        
+        this.ws.onopen = () => {
+          console.log('WebSocket conectado')
+          this.connectionStore.setConnected(true)
+          this.connectionStore.clearError()
+          resolve()
+        }
+        
+        this.ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            this.handleMessage(data)
+          } catch (error) {
+            console.error('Error parsing WebSocket message:', error, event.data)
+          }
+        }
+        
+        this.ws.onclose = (event) => {
+          console.log('WebSocket desconectado:', event.code, event.reason)
+          this.connectionStore.setConnected(false)
+          this.handleDisconnection(event)
+        }
+        
+        this.ws.onerror = (error) => {
+          console.error('WebSocket error:', error)
+          this.connectionStore.setError('Error de conexión WebSocket')
+          reject(error)
+        }
+        
+      } catch (error) {
+        console.error('Error al crear WebSocket:', error)
+        this.connectionStore.setError('No se pudo crear la conexión WebSocket')
+        reject(error)
+      }
+    })
+  }
+
+  buildWebSocketUrl() {
+    const baseUrl = this.connectionStore.wsUrl
+    const uuid = this.connectionStore.uuid
+    
+    if (uuid) {
+      return `${baseUrl}/?uuid=${encodeURIComponent(uuid)}`
+    }
+    
+    return baseUrl
+  }
+
+  handleMessage(data) {
+    const { type, ...rest } = data
+    
+    // Ejecutar handlers específicos para este tipo
+    const handlers = this.messageHandlers.get(type) || []
+    handlers.forEach(handler => handler(rest))
+    
+    // También emitir evento global
+    this.emit(type, rest)
+  }
+
+  handleDisconnection(event) {
+    // Limpiar timer de reconexión previo
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+    }
+    
+    // No intentar reconectar si fue cierre intencional
+    if (event.code === 1000) {
+      console.log('Cierre intencional, no reconectar')
+      return
+    }
+    
+    // Intentar reconectar
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++
+      const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1)
+      
+      console.log(`Reconectando en ${delay}ms (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
+      
+      this.reconnectTimer = setTimeout(() => {
+        this.connect().catch(error => {
+          console.error('Error en reconexión:', error)
+        })
+      }, delay)
+    } else {
+      console.error('Máximo de intentos de reconexión alcanzado')
+      this.connectionStore.setError('No se pudo reconectar después de múltiples intentos')
+    }
+  }
+
+  sendMessage(to, message) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket no está conectado')
+      return Promise.reject(new Error('WebSocket no está conectado'))
+    }
+    
+    return new Promise((resolve, reject) => {
+      try {
+        const payload = {
+          to,
+          message: typeof message === 'string' ? message : JSON.stringify(message)
+        }
+        
+        this.ws.send(JSON.stringify(payload))
+        console.log('Mensaje enviado:', payload)
+        resolve()
+      } catch (error) {
+        console.error('Error enviando mensaje:', error)
+        reject(error)
+      }
+    })
+  }
+
+  sendGameMessage(to, type, data) {
+    const message = `${type}|${JSON.stringify(data)}`
+    return this.sendMessage(to, message)
+  }
+
+  disconnect() {
+    // Limpiar timer de reconexión
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    
+    this.reconnectAttempts = 0
+    
+    if (this.ws) {
+      this.ws.close(1000, 'Cierre intencional por usuario')
+      this.ws = null
+    }
+    
+    this.connectionStore.setConnected(false)
+  }
+
+  // Sistema de eventos
+  on(event, handler) {
+    if (!this.messageHandlers.has(event)) {
+      this.messageHandlers.set(event, [])
+    }
+    this.messageHandlers.get(event).push(handler)
+  }
+
+  off(event, handler) {
+    if (this.messageHandlers.has(event)) {
+      const handlers = this.messageHandlers.get(event)
+      const index = handlers.indexOf(handler)
+      if (index > -1) {
+        handlers.splice(index, 1)
+      }
+    }
+  }
+
+  emit(event, data) {
+    // Los eventos se manejan a través del sistema de handlers
+    const handlers = this.messageHandlers.get(event) || []
+    handlers.forEach(handler => handler(data))
+  }
+}
+
+// Singleton instance
+let instance = null
+
+export function getWebSocketService() {
+  if (!instance) {
+    instance = new WebSocketService()
+  }
+  return instance
+}
+
+export default WebSocketService
