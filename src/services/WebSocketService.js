@@ -35,26 +35,22 @@ class WebSocketService {
     this.on('error', (data) => {
       console.error('Error del servidor WebSocket:', data)
       this.connectionStore.setError(data.error || 'Error desconocido')
-      this.emit('error', data)
     })
 
     // Handler para mensajes normales
     this.on('message', (data) => {
       console.log('Mensaje recibido:', data)
-      this.emit('message', data)
     })
 
     // Handler para confirmación de envío
     this.on('message_sent', (data) => {
       console.log('Mensaje enviado confirmado:', data)
-      this.emit('message_sent', data)
     })
 
     // Handler para confirmación de modo
     this.on('mode_set', (data) => {
       console.log('Modo establecido:', data)
       this.connectionStore.setMode(data.mode, data.visibility)
-      this.emit('mode_set', data)
     })
 
     // Handler para lista de hosts públicos
@@ -62,41 +58,35 @@ class WebSocketService {
       console.log('Lista de hosts públicos recibida:', data)
       this.connectionStore.setPublicHosts(data.hosts || [])
       this.connectionStore.updateLastPublicHostsUpdate()
-      this.emit('public_hosts_list', data)
     })
 
     // Handler para confirmación de suscripción
     this.on('subscribed', (data) => {
       console.log('Suscripción exitosa:', data)
       this.connectionStore.setSubscribedHost(data.to)
-      this.emit('subscribed', data)
     })
 
     // Handler para nuevo subscriber (solo para hosts)
     this.on('new_subscriber', (data) => {
       console.log('Nuevo subscriber:', data)
       this.connectionStore.addSubscriber(data.guest)
-      this.emit('new_subscriber', data)
     })
 
     // Handler para subscriber desconectado (solo para hosts)
     this.on('subscriber_disconnected', (data) => {
       console.log('Subscriber desconectado:', data)
       this.connectionStore.removeSubscriber(data.guest)
-      this.emit('subscriber_disconnected', data)
     })
 
     // Handler para host desconectado (solo para guests)
     this.on('host_disconnected', (data) => {
       console.log('Host desconectado:', data)
       this.connectionStore.setSubscribedHost(null)
-      this.emit('host_disconnected', data)
     })
 
     // Handler para mensajes broadcast
     this.on('broadcast_message', (data) => {
       console.log('Mensaje broadcast recibido:', data)
-      this.emit('broadcast_message', data)
     })
   }
 
@@ -163,11 +153,7 @@ class WebSocketService {
   handleMessage(data) {
     const { type, ...rest } = data
     
-    // Ejecutar handlers específicos para este tipo
-    const handlers = this.messageHandlers.get(type) || []
-    handlers.forEach(handler => handler(rest))
-    
-    // También emitir evento global
+    // Emitir evento global (los handlers se ejecutarán a través del sistema de eventos)
     this.emit(type, rest)
   }
 

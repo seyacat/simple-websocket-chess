@@ -6,10 +6,10 @@
     </div>
 
     <div class="content">
-      <!-- InformaciÃ³n del host -->
+      <!-- Información del host -->
       <div class="host-info-card">
         <div class="info-section">
-          <h3>Tu InformaciÃ³n</h3>
+          <h3>Tu Información</h3>
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">Token:</span>
@@ -28,7 +28,7 @@
             <div class="info-item">
               <span class="info-label">Visibilidad:</span>
               <span class="info-value visibility-badge" :class="visibilityClass">
-                {{ connectionStore.visibility === 'public' ? 'PÃºblico' : 'Privado' }}
+                {{ connectionStore.visibility === 'public' ? 'Público' : 'Privado' }}
               </span>
             </div>
             
@@ -41,7 +41,7 @@
           </div>
           
           <p class="help-text" v-if="connectionStore.visibility === 'public'">
-            Tu juego aparece en la lista pÃºblica del lobby. Los jugadores pueden unirse directamente.
+            Tu juego aparece en la lista pública del lobby. Los jugadores pueden unirse directamente.
           </p>
           <p class="help-text" v-else>
             Tu juego es privado. Comparte tu token con los jugadores para que se unan.
@@ -61,7 +61,7 @@
         <div v-if="connectionStore.subscribersCount === 0" class="empty-state">
           <p>Esperando que los jugadores se unan...</p>
           <p v-if="connectionStore.visibility === 'public'">
-            Los jugadores pueden encontrarte en la lista pÃºblica del lobby.
+            Los jugadores pueden encontrarte en la lista pública del lobby.
           </p>
           <p v-else>
             Comparte tu token <strong>{{ connectionStore.shortToken }}</strong> con los jugadores.
@@ -75,7 +75,7 @@
             class="player-card"
           >
             <div class="player-info">
-              <span class="player-icon">ðŸ‘¤</span>
+              <span class="player-icon">👤</span>
               <span class="player-token">{{ player }}</span>
             </div>
             <span class="player-status">Conectado</span>
@@ -105,7 +105,7 @@
             >
               <span v-if="isChangingVisibility">Cambiando...</span>
               <span v-else>
-                {{ connectionStore.visibility === 'public' ? 'Hacer Privado' : 'Hacer PÃºblico' }}
+                {{ connectionStore.visibility === 'public' ? 'Hacer Privado' : 'Hacer Público' }}
               </span>
             </button>
             
@@ -129,7 +129,7 @@
     <!-- Notificaciones -->
     <div v-if="notification" class="notification" :class="notification.type">
       <span>{{ notification.message }}</span>
-      <button @click="clearNotification" class="dismiss-button">Ã—</button>
+      <button @click="clearNotification" class="dismiss-button">×</button>
     </div>
 
     <!-- Estado de carga -->
@@ -173,11 +173,11 @@ const loadingMessage = computed(() => {
   return ''
 })
 
-// MÃ©todos
+// Métodos
 const copyToken = async () => {
   try {
     await navigator.clipboard.writeText(connectionStore.shortToken)
-    copyButtonText.value = 'Â¡Copiado!'
+    copyButtonText.value = '¡Copiado!'
     setTimeout(() => {
       copyButtonText.value = 'Copiar'
     }, 2000)
@@ -198,7 +198,7 @@ const startGame = async () => {
     // Iniciar juego en el GameStore
     await gameStore.startGame()
     
-    // El cambio a la vista de juego se manejarÃ¡ en App.vue
+    // El cambio a la vista de juego se manejará en App.vue
     // basado en el cambio de estado en gameStore
   } catch (error) {
     console.error('Error starting game:', error)
@@ -217,7 +217,7 @@ const changeVisibility = async () => {
     const newVisibility = connectionStore.visibility === 'public' ? 'private' : 'public'
     await wsService.setMode('host', newVisibility)
     
-    showNotification('success', `Juego ahora es ${newVisibility === 'public' ? 'pÃºblico' : 'privado'}`)
+    showNotification('success', `Juego ahora es ${newVisibility === 'public' ? 'público' : 'privado'}`)
   } catch (error) {
     console.error('Error changing visibility:', error)
     showNotification('error', `Error al cambiar visibilidad: ${error.message}`)
@@ -235,7 +235,7 @@ const cancelGame = async () => {
     // Cambiar a modo null para volver al lobby
     await wsService.setMode(null)
     
-    // El cambio a la vista de lobby se manejarÃ¡ en App.vue
+    // El cambio a la vista de lobby se manejará en App.vue
   } catch (error) {
     console.error('Error canceling game:', error)
     showNotification('error', `Error al cancelar el juego: ${error.message}`)
@@ -247,7 +247,7 @@ const cancelGame = async () => {
 const showNotification = (type, message) => {
   notification.value = { type, message }
   
-  // Auto-ocultar despuÃ©s de 5 segundos
+  // Auto-ocultar después de 5 segundos
   setTimeout(() => {
     if (notification.value && notification.value.message === message) {
       clearNotification()

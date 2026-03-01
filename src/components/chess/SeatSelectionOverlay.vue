@@ -22,11 +22,11 @@
         
         <div class="seat-info">
           <div v-if="seats.white.occupied" class="player-info">
-            <span class="player-icon">ðŸ‘¤</span>
+            <span class="player-icon">👤</span>
             <span class="player-name">{{ seats.white.playerName || 'Jugador' }}</span>
           </div>
           <div v-else class="empty-seat">
-            <span>Asiento vacÃ­o</span>
+            <span>Asiento vacío</span>
           </div>
         </div>
         
@@ -67,11 +67,11 @@
         
         <div class="seat-info">
           <div v-if="seats.black.occupied" class="player-info">
-            <span class="player-icon">ðŸ‘¤</span>
+            <span class="player-icon">👤</span>
             <span class="player-name">{{ seats.black.playerName || 'Jugador' }}</span>
           </div>
           <div v-else class="empty-seat">
-            <span>Asiento vacÃ­o</span>
+            <span>Asiento vacío</span>
           </div>
         </div>
         
@@ -101,7 +101,7 @@
       </div>
     </div>
     
-    <!-- InformaciÃ³n del jugador -->
+    <!-- Información del jugador -->
     <div class="player-info-card">
       <div class="info-row">
         <span class="info-label">Tu estado:</span>
@@ -120,24 +120,24 @@
       <div class="info-row">
         <span class="info-label">Espectadores:</span>
         <span class="info-value">
-          {{ spectatorsCount }} ðŸ‘ï¸
+          {{ spectatorsCount }} 👁️
         </span>
       </div>
     </div>
     
     <!-- Mensajes del juego -->
     <div v-if="gameStatus === 'paused'" class="game-message paused">
-      <p>â¸ï¸ Juego en pausa - Esperando segundo jugador</p>
-      <p class="message-sub">Un jugador abandonÃ³ el asiento. El juego continuarÃ¡ cuando alguien ocupe el asiento vacÃ­o.</p>
+      <p>⏸️ Juego en pausa - Esperando segundo jugador</p>
+      <p class="message-sub">Un jugador abandonó el asiento. El juego continuará cuando alguien ocupe el asiento vacío.</p>
     </div>
     
     <div v-if="gameStatus === 'waiting' && !bothSeatsOccupied" class="game-message waiting">
-      <p>â³ Esperando jugadores</p>
-      <p class="message-sub">El juego comenzarÃ¡ automÃ¡ticamente cuando ambos asientos estÃ©n ocupados.</p>
+      <p>⏳ Esperando jugadores</p>
+      <p class="message-sub">El juego comenzará automáticamente cuando ambos asientos estén ocupados.</p>
     </div>
     
     <div v-if="gameStatus === 'playing'" class="game-message playing">
-      <p>ðŸŽ® Juego en progreso</p>
+      <p>🎮 Juego en progreso</p>
       <p class="message-sub">Turno actual: {{ currentTurn === 'white' ? 'Blancas' : 'Negras' }}</p>
     </div>
     
@@ -148,7 +148,7 @@
         <li>Haz clic en "Ocupar Asiento" para jugar como Blancas o Negras</li>
         <li>Los espectadores pueden ver el juego pero no mover piezas</li>
         <li>Puedes dejar tu asiento en cualquier momento para convertirte en espectador</li>
-        <li>El juego comienza automÃ¡ticamente cuando ambos asientos estÃ¡n ocupados</li>
+        <li>El juego comienza automáticamente cuando ambos asientos están ocupados</li>
       </ul>
     </div>
   </div>
@@ -180,8 +180,8 @@ const statusText = computed(() => {
     case 'waiting': return 'Esperando jugadores'
     case 'playing': return 'Juego en progreso'
     case 'paused': return 'Juego en pausa'
-    case 'check': return 'Â¡Jaque!'
-    case 'checkmate': return 'Â¡Jaque mate!'
+    case 'check': return '¡Jaque!'
+    case 'checkmate': return '¡Jaque mate!'
     case 'finished': return 'Juego terminado'
     default: return 'Preparando...'
   }
@@ -203,7 +203,7 @@ const playerStatusClass = computed(() => {
   return 'player-status-none'
 })
 
-// MÃ©todos
+// Métodos
 function isMySeat(color) {
   return isSeated.value && mySeatColor.value === color
 }

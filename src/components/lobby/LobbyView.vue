@@ -6,7 +6,7 @@
     </div>
 
     <div class="lobby-content">
-      <!-- SecciÃ³n de creaciÃ³n de juego -->
+      <!-- Sección de creación de juego -->
       <div class="game-creation-section">
         <h3>Crear Nuevo Juego</h3>
         <div class="creation-options">
@@ -15,9 +15,9 @@
             class="create-button public-game"
             :disabled="isCreating"
           >
-            <span class="button-icon">ðŸŒ</span>
+            <span class="button-icon">🌐</span>
             <span class="button-text">
-              <strong>Juego PÃºblico</strong>
+              <strong>Juego Público</strong>
               <small>Visible en la lista para que otros se unan</small>
             </span>
           </button>
@@ -27,7 +27,7 @@
             class="create-button private-game"
             :disabled="isCreating"
           >
-            <span class="button-icon">ðŸ”’</span>
+            <span class="button-icon">🔐</span>
             <span class="button-text">
               <strong>Juego Privado</strong>
               <small>Solo con tu token compartido</small>
@@ -36,10 +36,10 @@
         </div>
       </div>
 
-      <!-- SecciÃ³n de lista de hosts pÃºblicos -->
+      <!-- Sección de lista de hosts públicos -->
       <div class="public-hosts-section">
         <div class="section-header">
-          <h3>Juegos PÃºblicos Disponibles</h3>
+          <h3>Juegos Públicos Disponibles</h3>
           <div class="refresh-controls">
             <span class="last-update">
               {{ lastUpdateText }}
@@ -55,8 +55,8 @@
         </div>
 
         <div v-if="publicHosts.length === 0" class="empty-state">
-          <p>No hay juegos pÃºblicos disponibles.</p>
-          <p>Crea uno o pide a un amigo que cree un juego pÃºblico.</p>
+          <p>No hay juegos públicos disponibles.</p>
+          <p>Crea uno o pide a un amigo que cree un juego público.</p>
         </div>
 
         <div v-else class="hosts-list">
@@ -72,12 +72,12 @@
               </div>
               <div class="host-stats">
                 <span class="stat">
-                  <span class="stat-icon">ðŸ‘¥</span>
+                  <span class="stat-icon">👥</span>
                   {{ host.subscribersCount }} jugador{{ host.subscribersCount !== 1 ? 'es' : '' }}
                 </span>
                 <span class="stat">
-                  <span class="stat-icon">ðŸŒ</span>
-                  PÃºblico
+                  <span class="stat-icon">🌐</span>
+                  Público
                 </span>
               </div>
             </div>
@@ -92,7 +92,7 @@
         </div>
       </div>
 
-      <!-- SecciÃ³n de unirse con token manual -->
+      <!-- Sección de unirse con token manual -->
       <div class="manual-join-section">
         <h3>Unirse con Token</h3>
         <div class="manual-join-form">
@@ -108,11 +108,11 @@
             class="join-button"
             :disabled="!isValidToken(manualToken) || isJoining"
           >
-            {{ isJoining ? 'UniÃ©ndose...' : 'Unirse' }}
+            {{ isJoining ? 'Uniéndose...' : 'Unirse' }}
           </button>
         </div>
         <p class="help-text">
-          PÃ­dele al host que te comparta su token para unirte a su juego privado.
+          Pídele al host que te comparta su token para unirte a su juego privado.
         </p>
       </div>
     </div>
@@ -126,7 +126,7 @@
     <!-- Mensajes de error -->
     <div v-if="errorMessage" class="error-message">
       {{ errorMessage }}
-      <button @click="clearError" class="dismiss-button">Ã—</button>
+      <button @click="clearError" class="dismiss-button">×</button>
     </div>
   </div>
 </template>
@@ -163,12 +163,12 @@ const lastUpdateText = computed(() => {
 
 const loadingMessage = computed(() => {
   if (isCreating.value) return 'Creando juego...'
-  if (isJoining.value) return 'UniÃ©ndose al juego...'
+  if (isJoining.value) return 'Uniéndose al juego...'
   if (isRefreshing.value) return 'Actualizando lista...'
   return ''
 })
 
-// MÃ©todos
+// Métodos
 const isValidToken = (token) => {
   return token && token.trim().length >= 4 && /^[A-Za-z0-9]+$/.test(token.trim())
 }
@@ -181,10 +181,10 @@ const createPublicGame = async () => {
   
   try {
     await wsService.setMode('host', 'public')
-    // La transiciÃ³n a la vista de host-waiting se manejarÃ¡ en App.vue
+    // La transición a la vista de host-waiting se manejará en App.vue
     // basado en el cambio de estado en connectionStore
   } catch (error) {
-    errorMessage.value = `Error al crear juego pÃºblico: ${error.message}`
+    errorMessage.value = `Error al crear juego público: ${error.message}`
     console.error('Error creating public game:', error)
   } finally {
     isCreating.value = false
@@ -199,7 +199,7 @@ const createPrivateGame = async () => {
   
   try {
     await wsService.setMode('host', 'private')
-    // La transiciÃ³n a la vista de host-waiting se manejarÃ¡ en App.vue
+    // La transición a la vista de host-waiting se manejará en App.vue
   } catch (error) {
     errorMessage.value = `Error al crear juego privado: ${error.message}`
     console.error('Error creating private game:', error)
@@ -221,7 +221,7 @@ const joinGame = async (hostToken) => {
     // Luego suscribirse al host
     await wsService.subscribeToHost(hostToken)
     
-    // La transiciÃ³n a la vista de guest-waiting se manejarÃ¡ en App.vue
+    // La transición a la vista de guest-waiting se manejará en App.vue
   } catch (error) {
     errorMessage.value = `Error al unirse al juego: ${error.message}`
     console.error('Error joining game:', error)
@@ -235,7 +235,7 @@ const joinGame = async (hostToken) => {
 const joinWithManualToken = async () => {
   const token = manualToken.value.trim()
   if (!isValidToken(token)) {
-    errorMessage.value = 'Token invÃ¡lido. Debe tener al menos 4 caracteres alfanumÃ©ricos.'
+    errorMessage.value = 'Token inválido. Debe tener al menos 4 caracteres alfanuméricos.'
     return
   }
   
@@ -281,13 +281,13 @@ const stopAutoRefresh = () => {
 
 // Lifecycle hooks
 onMounted(() => {
-  // Cargar lista inicial de hosts pÃºblicos
+  // Cargar lista inicial de hosts públicos
   if (connectionStore.isConnected) {
     refreshPublicHosts()
     startAutoRefresh()
   }
   
-  // Escuchar cambios en conexiÃ³n para manejar auto-refresh
+  // Escuchar cambios en conexión para manejar auto-refresh
   const unsubscribe = connectionStore.$subscribe(() => {
     if (connectionStore.isConnected && !refreshInterval.value) {
       refreshPublicHosts()

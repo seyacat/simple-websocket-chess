@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="connection-panel">
     <div class="panel-header">
-      <h3>ConexiÃ³n del Juego</h3>
+      <h3>Conexión del Juego</h3>
     </div>
     
     <div class="connection-status" :class="connectionStatus">
@@ -93,7 +93,7 @@
     </div>
     
     <div v-else class="disconnected-info">
-      <p>ConÃ©ctate al servidor WebSocket para comenzar.</p>
+      <p>Conéctate al servidor WebSocket para comenzar.</p>
       <button
         @click="connect"
         :disabled="isConnecting"
@@ -128,7 +128,7 @@
     
     <div class="debug-info" v-if="showDebugInfo">
       <details>
-        <summary>InformaciÃ³n de DepuraciÃ³n</summary>
+        <summary>Información de Depuración</summary>
         <pre class="debug-data">{{ debugData }}</pre>
       </details>
     </div>
@@ -158,12 +158,12 @@ const statusText = computed(() => {
   switch (connectionStore.connectionStatus) {
     case 'connected': return 'Conectado al servidor'
     case 'connecting': return 'Conectando...'
-    case 'error': return 'Error de conexiÃ³n'
+    case 'error': return 'Error de conexión'
     default: return 'Desconectado'
   }
 })
 
-const copyButtonText = computed(() => copied.value ? 'Â¡Copiado!' : 'Copiar')
+const copyButtonText = computed(() => copied.value ? '¡Copiado!' : 'Copiar')
 const canStartGame = computed(() => connectionStore.canPlay)
 const startButtonText = computed(() => {
   if (isHost.value) return 'Iniciar Partida (como Host)'
@@ -186,9 +186,9 @@ const debugData = computed(() => {
   }, null, 2)
 })
 
-// MÃ©todos
+// Métodos
 function isValidToken(token) {
-  // Validar formato bÃ¡sico de token (solo letras y nÃºmeros, 4-6 caracteres)
+  // Validar formato básico de token (solo letras y números, 4-6 caracteres)
   return token && /^[A-Z1-9]{4,6}$/.test(token)
 }
 
@@ -277,7 +277,7 @@ function resetAll() {
   copied.value = false
 }
 
-// InicializaciÃ³n
+// Inicialización
 onMounted(() => {
   // Cargar token del oponente si existe
   if (connectionStore.opponentToken) {

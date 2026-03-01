@@ -6,10 +6,10 @@
     </div>
 
     <div class="content">
-      <!-- InformaciÃ³n del host -->
+      <!-- Información del host -->
       <div class="host-info-card">
         <div class="info-section">
-          <h3>InformaciÃ³n del Juego</h3>
+          <h3>Información del Juego</h3>
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">Tu Token:</span>
@@ -37,25 +37,25 @@
           </div>
           
           <p class="help-text">
-            Esperando a que el host inicie el juego. El juego comenzarÃ¡ automÃ¡ticamente cuando el host haga clic en "Iniciar Juego".
+            Esperando a que el host inicie el juego. El juego comenzará automáticamente cuando el host haga clic en "Iniciar Juego".
           </p>
         </div>
       </div>
 
       <!-- Mensaje de espera -->
       <div class="waiting-message">
-        <div class="waiting-icon">â³</div>
+        <div class="waiting-icon">⏳</div>
         <h3>Esperando que el host inicie el juego...</h3>
         <p>
           El host <strong>{{ connectionStore.subscribedHost }}</strong> debe iniciar el juego.
-          Una vez que lo haga, el juego comenzarÃ¡ automÃ¡ticamente.
+          Una vez que lo haga, el juego comenzará automáticamente.
         </p>
         <div class="waiting-tips">
           <p><strong>Consejos:</strong></p>
           <ul>
-            <li>AsegÃºrate de tener una conexiÃ³n estable a internet</li>
-            <li>El juego puede tardar unos segundos en comenzar despuÃ©s de que el host lo inicie</li>
-            <li>Si el host se desconecta, serÃ¡s redirigido al lobby automÃ¡ticamente</li>
+            <li>Asegúrate de tener una conexión estable a internet</li>
+            <li>El juego puede tardar unos segundos en comenzar después de que el host lo inicie</li>
+            <li>Si el host se desconecta, serás redirigido al lobby automáticamente</li>
           </ul>
         </div>
       </div>
@@ -80,7 +80,7 @@
     <!-- Notificaciones -->
     <div v-if="notification" class="notification" :class="notification.type">
       <span>{{ notification.message }}</span>
-      <button @click="clearNotification" class="dismiss-button">Ã—</button>
+      <button @click="clearNotification" class="dismiss-button">×</button>
     </div>
 
     <!-- Estado de carga -->
@@ -113,7 +113,7 @@ const hostStatusClass = computed(() => {
   return hostConnected.value ? 'connected' : 'disconnected'
 })
 
-// MÃ©todos
+// Métodos
 const disconnect = async () => {
   if (isDisconnecting.value) return
   
@@ -126,7 +126,7 @@ const disconnect = async () => {
     // Cambiar a modo null para volver al lobby
     await wsService.setMode(null)
     
-    // El cambio a la vista de lobby se manejarÃ¡ en App.vue
+    // El cambio a la vista de lobby se manejará en App.vue
   } catch (error) {
     console.error('Error disconnecting:', error)
     showNotification('error', `Error al desconectar: ${error.message}`)
@@ -137,7 +137,7 @@ const disconnect = async () => {
 const showNotification = (type, message) => {
   notification.value = { type, message }
   
-  // Auto-ocultar despuÃ©s de 5 segundos
+  // Auto-ocultar después de 5 segundos
   setTimeout(() => {
     if (notification.value && notification.value.message === message) {
       clearNotification()
@@ -151,17 +151,17 @@ const clearNotification = () => {
 
 const handleHostDisconnected = (data) => {
   hostConnected.value = false
-  showNotification('error', `El host ${data.host} se ha desconectado. SerÃ¡s redirigido al lobby.`)
+  showNotification('error', `El host ${data.host} se ha desconectado. Serás redirigido al lobby.`)
   
-  // Redirigir al lobby despuÃ©s de 3 segundos
+  // Redirigir al lobby después de 3 segundos
   setTimeout(() => {
     disconnect()
   }, 3000)
 }
 
 const handleGameStart = (data) => {
-  showNotification('success', 'Â¡El juego ha comenzado!')
-  // El cambio a la vista de juego se manejarÃ¡ en App.vue
+  showNotification('success', '¡El juego ha comenzado!')
+  // El cambio a la vista de juego se manejará en App.vue
   // basado en el cambio de estado en gameStore
 }
 

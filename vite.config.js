@@ -13,5 +13,22 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: ({ name }) => {
+          if (/\.(css)$/.test(name ?? '')) {
+            return 'assets/css/[name]-[hash][extname]'
+          }
+          if (/\.(png|jpe?g|gif|svg|webp|avif)$/.test(name ?? '')) {
+            return 'assets/images/[name]-[hash][extname]'
+          }
+          return 'assets/[name]-[hash][extname]'
+        }
+      }
+    }
   }
 })

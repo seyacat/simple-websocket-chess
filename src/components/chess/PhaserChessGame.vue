@@ -2,7 +2,7 @@
   <div class="phaser-chess-game">
     <div ref="gameContainer" class="game-container"></div>
     
-    <!-- Overlay de selecciÃ³n de asientos -->
+    <!-- Overlay de selección de asientos -->
     <SeatSelectionOverlay
       v-if="shouldShowSeatSelection"
       @close="onSeatSelectionClose"
@@ -68,11 +68,11 @@ const playerStatusText = computed(() => {
 
 const playerStatusIcon = computed(() => {
   if (gameStore.isSeated) {
-    return gameStore.mySeatColor === 'white' ? 'â™”' : 'â™š'
+    return gameStore.mySeatColor === 'white' ? '♔' : '♚'
   } else if (gameStore.isSpectator) {
-    return 'ðŸ‘ï¸'
+    return '👁️'
   } else {
-    return 'ðŸš«'
+    return '🚫'
   }
 })
 
@@ -83,27 +83,27 @@ const playerStatusClass = computed(() => {
 })
 
 const shouldShowSeatSelection = computed(() => {
-  // Mostrar selecciÃ³n de asientos si:
-  // 1. El usuario lo solicita explÃ­citamente (showSeatSelection = true)
-  // 2. O no estÃ¡ sentado y el juego no estÃ¡ en progreso
-  // 3. O el juego estÃ¡ pausado
+  // Mostrar selección de asientos si:
+  // 1. El usuario lo solicita explícitamente (showSeatSelection = true)
+  // 2. O no está sentado y el juego no está en progreso
+  // 3. O el juego está pausado
   return showSeatSelection.value ||
          (!gameStore.isSeated && gameStore.gameStatus !== 'playing') ||
          gameStore.gameStatus === 'paused'
 })
 
-// MÃ©todos
+// Métodos
 function onSeatSelectionClose() {
-  // Solo ocultar el overlay si el jugador estÃ¡ sentado
+  // Solo ocultar el overlay si el jugador está sentado
   if (gameStore.isSeated) {
     showSeatSelection.value = false
   }
 }
 
-// ConfiguraciÃ³n de Phaser
+// Configuración de Phaser
 const phaserConfig = {
   type: Phaser.AUTO,
-  parent: null, // Se establecerÃ¡ en mounted
+  parent: null, // Se establecerá en mounted
   width: props.boardSize,
   height: props.boardSize,
   backgroundColor: '#f0f0f0',
@@ -125,7 +125,7 @@ let pieceSprites = []
 let selectedPiece = null
 let validMoveIndicators = []
 
-// Assets (placeholders - se reemplazarÃ¡n con assets reales)
+// Assets (placeholders - se reemplazarán con assets reales)
 const pieceAssets = {
   'white': {
     'king': 'white_king',
@@ -153,8 +153,8 @@ function preload() {
   scene.load.image('white_square', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==')
   scene.load.image('black_square', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
   
-  // Cargar piezas placeholder (usaremos grÃ¡ficos generados)
-  // En una implementaciÃ³n real, cargarÃ­amos sprites reales
+  // Cargar piezas placeholder (usaremos gráficos generados)
+  // En una implementación real, cargaríamos sprites reales
 }
 
 function create() {
@@ -181,14 +181,14 @@ function create() {
 }
 
 function update() {
-  // ActualizaciÃ³n por frame
+  // Actualización por frame
   // Podemos usar esto para animaciones suaves
 }
 
 function createBoard() {
   const squareSize = props.boardSize / 8
   
-  // Limpiar grÃ¡ficos previos
+  // Limpiar gráficos previos
   if (boardGraphics) {
     boardGraphics.destroy()
   }
@@ -203,12 +203,12 @@ function createBoard() {
       
       // Alternar colores
       const isLight = (row + col) % 2 === 0
-      const color = isLight ? 0xf0d9b5 : 0xb58863 // Colores de ajedrez estÃ¡ndar
+      const color = isLight ? 0xf0d9b5 : 0xb58863 // Colores de ajedrez estándar
       
       boardGraphics.fillStyle(color, 1)
       boardGraphics.fillRect(x, y, squareSize, squareSize)
       
-      // AÃ±adir borde
+      // Añadir borde
       boardGraphics.lineStyle(1, 0x000000, 0.2)
       boardGraphics.strokeRect(x, y, squareSize, squareSize)
       
@@ -254,14 +254,14 @@ function createPieces() {
 }
 
 function createPieceSprite(x, y, size, color, type) {
-  // Crear grÃ¡fico placeholder (cÃ­rculo con letra)
+  // Crear gráfico placeholder (círculo con letra)
   const graphics = scene.add.graphics()
   
   // Color de la pieza
   const fillColor = color === 'white' ? 0xffffff : 0x333333
   const borderColor = color === 'white' ? 0x666666 : 0x000000
   
-  // Dibujar cÃ­rculo
+  // Dibujar círculo
   graphics.fillStyle(fillColor, 1)
   graphics.fillCircle(0, 0, size * 0.4)
   
@@ -347,7 +347,7 @@ function setupInput() {
 }
 
 function handlePieceSelection(row, col) {
-  // Limpiar selecciÃ³n previa
+  // Limpiar selección previa
   clearSelection()
   
   // Seleccionar pieza
@@ -360,7 +360,7 @@ function handlePieceSelection(row, col) {
     sprite.setScale(1.1)
   }
   
-  // Mostrar movimientos vÃ¡lidos
+  // Mostrar movimientos válidos
   showValidMoves(row, col)
   
   // Notificar al store
@@ -370,7 +370,7 @@ function handlePieceSelection(row, col) {
 function handlePieceMove(toRow, toCol) {
   if (!selectedPiece) return
   
-  // Verificar si el movimiento es vÃ¡lido
+  // Verificar si el movimiento es válido
   const isValid = gameStore.validMoves.some(move => 
     move.row === toRow && move.col === toCol
   )
@@ -386,7 +386,7 @@ function handlePieceMove(toRow, toCol) {
   // Notificar al store
   gameStore.movePiece({ row: toRow, col: toCol })
   
-  // Limpiar selecciÃ³n
+  // Limpiar selección
   clearSelection()
 }
 
@@ -398,7 +398,7 @@ function movePieceVisual(fromRow, fromCol, toRow, toCol) {
   const targetX = toCol * squareSize + squareSize / 2
   const targetY = toRow * squareSize + squareSize / 2
   
-  // AnimaciÃ³n de movimiento
+  // Animación de movimiento
   scene.tweens.add({
     targets: sprite,
     x: targetX,
@@ -440,7 +440,7 @@ function showValidMoves(row, col) {
     const x = move.col * squareSize + squareSize / 2
     const y = move.row * squareSize + squareSize / 2
     
-    // Crear indicador de movimiento vÃ¡lido
+    // Crear indicador de movimiento válido
     const graphics = scene.add.graphics()
     graphics.fillStyle(0x00ff00, 0.3)
     graphics.fillCircle(x, y, squareSize * 0.2)
@@ -476,14 +476,14 @@ function getPieceAt(row, col) {
   )
 }
 
-// MÃ©todos del componente Vue
+// Métodos del componente Vue
 function initializeGame() {
   try {
     if (!gameContainer.value) {
       throw new Error('Contenedor del juego no encontrado')
     }
     
-    // Configurar parent en la configuraciÃ³n
+    // Configurar parent en la configuración
     phaserConfig.parent = gameContainer.value
     
     // Crear instancia de Phaser
@@ -516,7 +516,7 @@ watch(() => gameStore.board, (newBoard) => {
 }, { deep: true })
 
 watch(() => gameStore.selectedPiece, (newSelection) => {
-  // Sincronizar selecciÃ³n
+  // Sincronizar selección
   if (gameInitialized.value && scene) {
     if (newSelection) {
       handlePieceSelection(newSelection.row, newSelection.col)
