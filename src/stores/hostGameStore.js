@@ -465,11 +465,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
     
     const message = formatWebSocketMessage(type, data)
     
-    // En el protocolo actual, enviar a sí mismo para broadcast
-    wsService.sendMessage(
-      connectionStore.shortToken,
-      message
-    ).catch(error => {
+    // Usar comando de broadcast explícito
+    wsService.broadcast(message).catch(error => {
       console.error('Error enviando broadcast:', error)
     })
   }

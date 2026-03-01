@@ -1,8 +1,8 @@
 // Lógica de juego compartida entre host y player
 // Exporta constantes, funciones de utilidad y tipos comunes
 
-// Re-exportar desde chessRules.js
-export {
+// Importar desde chessRules.js para uso local y re-exportar
+import {
   createInitialBoard,
   getValidMoves,
   isValidMove,
@@ -13,6 +13,19 @@ export {
   coordinatesToAlgebraic,
   COLORS
 } from '@/utils/chessRules'
+
+// Re-exportar las mismas funciones
+export {
+  createInitialBoard,
+  getValidMoves,
+  isValidMove,
+  applyMove,
+  isKingInCheck,
+  isCheckmate,
+  isStalemate,
+  coordinatesToAlgebraic,
+  COLORS
+}
 
 // Constantes adicionales para el juego
 export const PIECE_TYPES = {

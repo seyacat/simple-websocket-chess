@@ -150,12 +150,17 @@ class WebSocketService {
   }
 
   buildWebSocketUrl() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = import.meta.env.VITE_WS_SERVER_HOST || 'closer.click'
-    const port = import.meta.env.VITE_WS_SERVER_PORT || '4000'
+    // Usar VITE_WS_URL del entorno o valor por defecto
+    const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4001'
     const uuid = this.connectionStore.uuid
     
-    let url = `${protocol}//${host}:${port}/ws`
+    // Asegurar que la URL base termine con /ws
+    let url = baseUrl
+    if (!url.endsWith('/ws')) {
+      // Si la URL base no termina con /ws, agregarlo
+      url = url.endsWith('/') ? `${url}ws` : `${url}/ws`
+    }
+    
     if (uuid) {
       url += `?uuid=${uuid}`
     }
@@ -227,6 +232,29 @@ class WebSocketService {
   sendGameMessage(to, type, data) {
     const message = `${type}|${JSON.stringify(data)}`
     return this.sendMessage(to, message)
+  }
+
+  broadcast(message) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket no está conectado')
+      return Promise.reject(new Error('WebSocket no está conectado'))
+    }
+
+    return new Promise((resolve, reject) => {
+      try {
+        const payload = {
+          type: 'broadcast',
+          message: typeof message === 'string' ? message : JSON.stringify(message)
+        }
+        
+        this.ws.send(JSON.stringify(payload))
+        console.log('Broadcast enviado:', payload)
+        resolve()
+      } catch (error) {
+        console.error('Error enviando broadcast:', error)
+        reject(error)
+      }
+    })
   }
 
   // Métodos para nuevo protocolo de lobby
