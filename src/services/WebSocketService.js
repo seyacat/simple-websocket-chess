@@ -37,9 +37,11 @@ class WebSocketService {
       this.connectionStore.setError(data.error || 'Error desconocido')
     })
 
-    // Handler para mensajes normales
+    // Handler para mensajes normales (directos de guest a host)
     this.on('message', (data) => {
-      console.log('Mensaje recibido:', data)
+      console.log('Mensaje directo recibido:', data)
+      // Este evento será manejado por el hostGameStore si estamos en modo host
+      this.emit('direct_message', data)
     })
 
     // Handler para confirmación de envío
@@ -70,23 +72,31 @@ class WebSocketService {
     this.on('new_subscriber', (data) => {
       console.log('Nuevo subscriber:', data)
       this.connectionStore.addSubscriber(data.guest)
+      // Emitir evento específico para hostGameStore
+      this.emit('guest_subscribed', data)
     })
 
     // Handler para subscriber desconectado (solo para hosts)
     this.on('subscriber_disconnected', (data) => {
       console.log('Subscriber desconectado:', data)
       this.connectionStore.removeSubscriber(data.guest)
+      // Emitir evento específico para hostGameStore
+      this.emit('guest_disconnected', data)
     })
 
     // Handler para host desconectado (solo para guests)
     this.on('host_disconnected', (data) => {
       console.log('Host desconectado:', data)
       this.connectionStore.setSubscribedHost(null)
+      // Emitir evento específico para playerGameStore
+      this.emit('host_lost', data)
     })
 
-    // Handler para mensajes broadcast
+    // Handler para mensajes broadcast (del host a todos)
     this.on('broadcast_message', (data) => {
       console.log('Mensaje broadcast recibido:', data)
+      // Emitir evento específico para playerGameStore (y hostGameStore si el host también es jugador)
+      this.emit('game_broadcast', data)
     })
   }
 
@@ -140,14 +150,31 @@ class WebSocketService {
   }
 
   buildWebSocketUrl() {
-    const baseUrl = this.connectionStore.wsUrl
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = import.meta.env.VITE_WS_SERVER_HOST || 'closer.click'
+    const port = import.meta.env.VITE_WS_SERVER_PORT || '4000'
     const uuid = this.connectionStore.uuid
     
+    let url = `${protocol}//${host}:${port}/ws`
     if (uuid) {
-      return `${baseUrl}/?uuid=${encodeURIComponent(uuid)}`
+      url += `?uuid=${uuid}`
     }
     
-    return baseUrl
+    return url
+  }
+
+  handleDisconnection(event) {
+    // Intentar reconectar si no fue un cierre intencional
+    if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts++
+      console.log(`Intentando reconectar (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
+      
+      this.reconnectTimer = setTimeout(() => {
+        this.connect().catch(error => {
+          console.error('Error reconectando:', error)
+        })
+      }, this.reconnectDelay)
+    }
   }
 
   handleMessage(data) {
@@ -155,35 +182,21 @@ class WebSocketService {
     
     // Emitir evento global (los handlers se ejecutarán a través del sistema de eventos)
     this.emit(type, rest)
-  }
-
-  handleDisconnection(event) {
-    // Limpiar timer de reconexión previo
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer)
-    }
     
-    // No intentar reconectar si fue cierre intencional
-    if (event.code === 1000) {
-      console.log('Cierre intencional, no reconectar')
-      return
-    }
-    
-    // Intentar reconectar
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++
-      const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1)
-      
-      console.log(`Reconectando en ${delay}ms (intento ${this.reconnectAttempts}/${this.maxReconnectAttempts})`)
-      
-      this.reconnectTimer = setTimeout(() => {
-        this.connect().catch(error => {
-          console.error('Error en reconexión:', error)
-        })
-      }, delay)
-    } else {
-      console.error('Máximo de intentos de reconexión alcanzado')
-      this.connectionStore.setError('No se pudo reconectar después de múltiples intentos')
+    // Para mensajes específicos del juego, emitir eventos adicionales
+    if (type === 'broadcast_message') {
+      // Parsear el mensaje broadcast para determinar el tipo de mensaje de juego
+      const { message } = rest
+      if (message && message.includes('|')) {
+        const [msgType, jsonData] = message.split('|')
+        try {
+          const parsedData = JSON.parse(jsonData)
+          // Emitir evento específico para el tipo de mensaje de juego
+          this.emit(`game_${msgType.toLowerCase()}`, parsedData)
+        } catch (error) {
+          console.error('Error parseando mensaje de juego:', error)
+        }
+      }
     }
   }
 
@@ -192,10 +205,11 @@ class WebSocketService {
       console.error('WebSocket no está conectado')
       return Promise.reject(new Error('WebSocket no está conectado'))
     }
-    
+
     return new Promise((resolve, reject) => {
       try {
         const payload = {
+          type: 'send_message',
           to,
           message: typeof message === 'string' ? message : JSON.stringify(message)
         }
@@ -358,5 +372,3 @@ export function getWebSocketService() {
   }
   return instance
 }
-
-export default WebSocketService
