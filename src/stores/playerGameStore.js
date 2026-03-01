@@ -57,6 +57,9 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     moveHistory.value = initialGameState.moveHistory
     seats.value = initialGameState.seats
     spectators.value = initialGameState.spectators
+    playerColor.value = COLORS.WHITE // Reset player color to default
+    selectedPiece.value = null // Clear any selected piece
+    validMoves.value = [] // Clear valid moves
   }
   
   // Getters
@@ -88,6 +91,14 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   
   const isSpectator = computed(() => {
     return !isSeated.value && spectators.value.includes(connectionStore.uuid)
+  })
+  
+  // Indica si el host al que estamos suscritos tiene una instancia activa
+  const hostInstanceActive = computed(() => {
+    // El host tiene instancia activa si estamos suscritos y recibimos broadcast
+    // Para simplificar, asumimos que si estamos suscritos, el host está activo
+    // En realidad deberíamos verificar si hemos recibido mensajes recientemente
+    return connectionStore.isSubscribed
   })
   
   const bothSeatsOccupied = computed(() => {
@@ -418,8 +429,15 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
    * @param {Object} gameEndData - Datos de fin de juego
    */
   function applyGameEnd(gameEndData) {
-    gameStatus.value = GAME_STATUS.FINISHED
-    // Podríamos mostrar el resultado aquí
+    // Cuando el juego termina (especialmente si el host lo cierra),
+    // resetear completamente el estado local
+    console.log('Juego terminado, reseteando estado local. Razón:', gameEndData?.reason || 'desconocida')
+    initializeBoard()
+    
+    // Si el host cerró el juego, también podríamos mostrar un mensaje
+    if (gameEndData?.reason === 'host_closed_game') {
+      console.log('El host cerró el juego')
+    }
   }
   
   /**
@@ -483,9 +501,17 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     })
     
     // Handler para desconexión del host
-    wsService.on('host_disconnected', () => {
-      gameStatus.value = GAME_STATUS.FINISHED
-      // Podríamos mostrar un mensaje al usuario
+    wsService.on('host_disconnected', (data) => {
+      // Cuando el host se desconecta o cierra el juego, resetear completamente el estado local
+      console.log('Host desconectado, reseteando estado local del juego. Razón:', data?.reason || 'desconocida')
+      initializeBoard()
+      
+      // También podríamos mostrar un mensaje al usuario basado en la razón
+      if (data?.reason === 'closed_game') {
+        console.log('El host cerró el juego intencionalmente')
+      } else if (data?.reason === 'changed_mode') {
+        console.log('El host cambió de modo')
+      }
     })
   }
   
@@ -512,6 +538,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     isSeated,
     mySeatColor,
     isSpectator,
+    hostInstanceActive,
     bothSeatsOccupied,
     availableSeats,
     spectatorsCount,

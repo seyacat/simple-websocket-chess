@@ -109,13 +109,13 @@
               </span>
             </button>
             
-            <button 
+            <button
               @click="cancelGame"
               class="cancel-button"
               :disabled="isCanceling"
             >
-              <span v-if="isCanceling">Cancelando...</span>
-              <span v-else>Cancelar Juego</span>
+              <span v-if="isCanceling">Cerrando juego...</span>
+              <span v-else>Cerrar Juego y Volver al Lobby</span>
             </button>
           </div>
           
@@ -144,10 +144,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useGameStore } from '@/stores/gameStore'
+import { useHostGameStore } from '@/stores/hostGameStore'
 import { getWebSocketService } from '@/services/WebSocketService'
 
 const connectionStore = useConnectionStore()
 const gameStore = useGameStore()
+const hostGameStore = useHostGameStore()
 const wsService = getWebSocketService()
 
 // Estado local
@@ -232,6 +234,12 @@ const cancelGame = async () => {
   isCanceling.value = true
   
   try {
+    // Notificar a todos los guests que el host está cerrando el juego
+    hostGameStore.destroyHostInstance()
+    
+    // Esperar un momento para que los guests reciban la notificación
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
     // Cambiar a modo null para volver al lobby
     await wsService.setMode(null)
     

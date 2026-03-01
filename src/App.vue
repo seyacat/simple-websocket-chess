@@ -4,11 +4,13 @@ import LobbyView from './components/lobby/LobbyView.vue'
 import PhaserChessGame from './components/chess/PhaserChessGame.vue'
 import { useGameStore } from './stores/gameStore'
 import { useConnectionStore } from '@/stores/connectionStore'
+import { useHostGameStore } from '@/stores/hostGameStore'
 import { getWebSocketService } from '@/services/WebSocketService'
 
 // Stores
 const gameStore = useGameStore()
 const connectionStore = useConnectionStore()
+const hostGameStore = useHostGameStore()
 const wsService = getWebSocketService()
 
 // Estado local
@@ -152,6 +154,15 @@ wsService.on('host_disconnected', () => {
 // Método para volver al lobby
 const returnToLobby = async () => {
   try {
+    // Si somos host, destruir la instancia del host primero
+    if (connectionStore.isHost) {
+      // Notificar a todos los guests que el host está cerrando el juego
+      hostGameStore.destroyHostInstance()
+      
+      // Esperar un momento para que los guests reciban la notificación
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    
     // Si estamos suscritos como guest, desuscribirse primero
     if (connectionStore.isGuest && connectionStore.subscribedHost) {
       await wsService.unsubscribe()

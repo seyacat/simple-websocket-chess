@@ -51,6 +51,13 @@ export const useHostGameStore = defineStore('hostGame', () => {
     return isHostPlaying.value && currentTurn.value === hostAsPlayerColor.value
   })
   
+  // Indica si la instancia del host está activa (host tiene un juego creado)
+  const hostInstanceActive = computed(() => {
+    // La instancia está activa si el host está en modo 'host'
+    // y tiene un estado de juego inicializado (no solo el estado por defecto)
+    return connectionStore.isHost && gameState.value.gameStatus !== undefined
+  })
+  
   const bothSeatsOccupied = computed(() => {
     return seats.value.white.occupied && seats.value.black.occupied
   })
@@ -628,6 +635,32 @@ export const useHostGameStore = defineStore('hostGame', () => {
     initializeGameAsHost()
   }
   
+  /**
+   * Destruye la instancia del host, notificando a todos los guests
+   * y limpiando el estado local
+   */
+  function destroyHostInstance() {
+    // Notificar a todos los guests que el host está cerrando el juego
+    broadcastGameUpdate(MESSAGE_TYPES.GAME_END, {
+      reason: 'host_closed_game',
+      message: 'El host ha cerrado el juego'
+    })
+    
+    // Limpiar estado local del juego
+    gameState.value = createInitialGameState()
+    hostAsPlayerColor.value = null
+    hostSelectedPiece.value = null
+    hostValidMoves.value = []
+    
+    // Limpiar lista de espectadores
+    gameState.value.spectators = []
+    
+    // Notificar al servidor que el host está cambiando de modo
+    // (esto se manejará en App.vue llamando a setMode(null))
+    
+    console.log('Instancia del host destruida')
+  }
+  
   // Inicializar WebSocket listeners para mensajes directos de guests
   function initWebSocketListeners() {
     // Handler para mensajes directos de guests
@@ -686,6 +719,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     // Getters
     isHostPlaying,
     isHostTurn,
+    hostInstanceActive,
     bothSeatsOccupied,
     availableSeats,
     spectatorsCount,
@@ -697,6 +731,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     startGame,
     endGame,
     resetGame,
+    destroyHostInstance,
     
     // Acciones del host como jugador
     occupySeatAsHost,

@@ -86,9 +86,9 @@ class WebSocketService {
 
     // Handler para host desconectado (solo para guests)
     this.on('host_disconnected', (data) => {
-      console.log('Host desconectado:', data)
+      console.log('Host desconectado:', data.reason || 'disconnected', data)
       this.connectionStore.setSubscribedHost(null)
-      // Emitir evento específico para playerGameStore
+      // Emitir evento específico para playerGameStore con la razón
       this.emit('host_lost', data)
     })
 
