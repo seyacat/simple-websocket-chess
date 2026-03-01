@@ -1,7 +1,7 @@
-<template>
+﻿<template>
   <div class="connection-panel">
     <div class="panel-header">
-      <h3>Conexión del Juego</h3>
+      <h3>ConexiÃ³n del Juego</h3>
     </div>
     
     <div class="connection-status" :class="connectionStatus">
@@ -93,7 +93,7 @@
     </div>
     
     <div v-else class="disconnected-info">
-      <p>Conéctate al servidor WebSocket para comenzar.</p>
+      <p>ConÃ©ctate al servidor WebSocket para comenzar.</p>
       <button
         @click="connect"
         :disabled="isConnecting"
@@ -128,7 +128,7 @@
     
     <div class="debug-info" v-if="showDebugInfo">
       <details>
-        <summary>Información de Depuración</summary>
+        <summary>InformaciÃ³n de DepuraciÃ³n</summary>
         <pre class="debug-data">{{ debugData }}</pre>
       </details>
     </div>
@@ -158,12 +158,12 @@ const statusText = computed(() => {
   switch (connectionStore.connectionStatus) {
     case 'connected': return 'Conectado al servidor'
     case 'connecting': return 'Conectando...'
-    case 'error': return 'Error de conexión'
+    case 'error': return 'Error de conexiÃ³n'
     default: return 'Desconectado'
   }
 })
 
-const copyButtonText = computed(() => copied.value ? '¡Copiado!' : 'Copiar')
+const copyButtonText = computed(() => copied.value ? 'Â¡Copiado!' : 'Copiar')
 const canStartGame = computed(() => connectionStore.canPlay)
 const startButtonText = computed(() => {
   if (isHost.value) return 'Iniciar Partida (como Host)'
@@ -186,9 +186,9 @@ const debugData = computed(() => {
   }, null, 2)
 })
 
-// Métodos
+// MÃ©todos
 function isValidToken(token) {
-  // Validar formato básico de token (solo letras y números, 4-6 caracteres)
+  // Validar formato bÃ¡sico de token (solo letras y nÃºmeros, 4-6 caracteres)
   return token && /^[A-Z1-9]{4,6}$/.test(token)
 }
 
@@ -277,7 +277,7 @@ function resetAll() {
   copied.value = false
 }
 
-// Inicialización
+// InicializaciÃ³n
 onMounted(() => {
   // Cargar token del oponente si existe
   if (connectionStore.opponentToken) {
@@ -297,10 +297,10 @@ onMounted(() => {
 
 <style scoped>
 .connection-panel {
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -312,7 +312,7 @@ onMounted(() => {
 
 .panel-header h3 {
   margin: 0;
-  color: #333;
+  color: var(--color-text);
   font-size: 18px;
 }
 
@@ -322,15 +322,15 @@ onMounted(() => {
   margin-bottom: 20px;
   padding: 10px;
   border-radius: 6px;
-  background: #f8f9fa;
+  background: var(--color-surface);
 }
 
 .connection-status.connected {
-  background: #e8f5e9;
+  background: rgba(76, 175, 80, 0.1);
 }
 
 .connection-status.error {
-  background: #ffebee;
+  background: rgba(244, 67, 54, 0.1);
 }
 
 .status-indicator {
@@ -341,23 +341,23 @@ onMounted(() => {
 }
 
 .connection-status.connected .status-indicator {
-  background: #4caf50;
-  box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+  background: var(--color-button-success);
+  box-shadow: 0 0 8px var(--color-success-light);
 }
 
 .connection-status.error .status-indicator {
-  background: #f44336;
-  box-shadow: 0 0 8px rgba(244, 67, 54, 0.3);
+  background: var(--color-button-danger);
+  box-shadow: 0 0 8px var(--color-error-light);
 }
 
 .connection-status:not(.connected):not(.error) .status-indicator {
-  background: #ff9800;
-  box-shadow: 0 0 8px rgba(255, 152, 0, 0.3);
+  background: var(--color-button-warning);
+  box-shadow: 0 0 8px var(--color-warning-light);
 }
 
 .status-text {
   font-weight: 500;
-  color: #555;
+  color: var(--color-text-secondary);
 }
 
 .connected-info,
@@ -374,7 +374,7 @@ label {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #444;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 
@@ -388,21 +388,21 @@ label {
 .token-value {
   flex: 1;
   padding: 10px 12px;
-  background: #f5f5f5;
+  background: var(--color-surface-variant);
   border: 1px solid #ddd;
   border-radius: 4px;
   font-family: 'Courier New', monospace;
   font-size: 16px;
   font-weight: bold;
   letter-spacing: 1px;
-  color: #333;
+  color: var(--color-text);
   text-align: center;
 }
 
 .copy-button {
   padding: 10px 16px;
-  background: #2196f3;
-  color: white;
+  background: var(--color-button-primary);
+  color: var(--color-text-on-primary);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -447,7 +447,7 @@ label {
 }
 
 .token-input:disabled {
-  background: #f5f5f5;
+  background: var(--color-surface-variant);
   color: #999;
   cursor: not-allowed;
 }
@@ -468,8 +468,8 @@ label {
 }
 
 .connect-button {
-  background: #4caf50;
-  color: white;
+  background: var(--color-button-success);
+  color: var(--color-text-on-primary);
   min-width: 100px;
 }
 
@@ -484,8 +484,8 @@ label {
 }
 
 .disconnect-button {
-  background: #f44336;
-  color: white;
+  background: var(--color-button-danger);
+  color: var(--color-text-on-primary);
   min-width: 100px;
 }
 
@@ -494,8 +494,8 @@ label {
 }
 
 .connect-ws-button {
-  background: #2196f3;
-  color: white;
+  background: var(--color-button-primary);
+  color: var(--color-text-on-primary);
   width: 100%;
   margin-top: 10px;
 }
@@ -535,7 +535,7 @@ label {
 .role-button {
   flex: 1;
   padding: 10px;
-  background: #f5f5f5;
+  background: var(--color-surface-variant);
   border: 1px solid #ddd;
   border-radius: 4px;
   cursor: pointer;
@@ -548,8 +548,8 @@ label {
 }
 
 .role-button.active {
-  background: #2196f3;
-  color: white;
+  background: var(--color-button-primary);
+  color: var(--color-text-on-primary);
   border-color: #2196f3;
 }
 
@@ -560,8 +560,8 @@ label {
 .start-game-button {
   width: 100%;
   padding: 12px;
-  background: #ff9800;
-  color: white;
+  background: var(--color-button-warning);
+  color: var(--color-text-on-primary);
   font-size: 16px;
   font-weight: 600;
 }
@@ -579,7 +579,7 @@ label {
 .error-message {
   margin-top: 15px;
   padding: 12px;
-  background: #ffebee;
+  background: rgba(244, 67, 54, 0.1);
   border: 1px solid #ffcdd2;
   border-radius: 4px;
   color: #c62828;
@@ -600,7 +600,7 @@ label {
 
 .clear-error-button:hover {
   background: #c62828;
-  color: white;
+  color: var(--color-text-on-primary);
 }
 
 .connection-actions {
@@ -618,7 +618,7 @@ label {
 .reset-button {
   flex: 1;
   background: #9e9e9e;
-  color: white;
+  color: var(--color-text-on-primary);
 }
 
 .reset-button:hover {
@@ -640,13 +640,13 @@ label {
 }
 
 .debug-info summary:hover {
-  color: #333;
+  color: var(--color-text);
 }
 
 .debug-data {
   margin-top: 10px;
   padding: 10px;
-  background: #f5f5f5;
+  background: var(--color-surface-variant);
   border-radius: 4px;
   font-size: 11px;
   font-family: 'Courier New', monospace;

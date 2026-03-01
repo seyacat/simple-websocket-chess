@@ -20,10 +20,26 @@ export const useGameStore = defineStore('game', () => {
   const currentTurn = ref(COLORS.WHITE) // 'white' o 'black'
   const selectedPiece = ref(null) // {row, col} o null
   const validMoves = ref([]) // Array de {row, col}
-  const gameStatus = ref('waiting') // 'waiting', 'playing', 'check', 'checkmate', 'stalemate', 'finished'
+  const gameStatus = ref('waiting') // 'waiting', 'playing', 'check', 'checkmate', 'stalemate', 'finished', 'paused'
   const moveHistory = ref([])
   const playerColor = ref(COLORS.WHITE) // Color del jugador local
   const isHost = ref(false)
+  
+  // Nuevo estado: Sistema de asientos
+  const seats = ref({
+    white: {
+      occupied: false,
+      playerToken: null,
+      playerName: null
+    },
+    black: {
+      occupied: false,
+      playerToken: null,
+      playerName: null
+    }
+  })
+  
+  const spectators = ref([]) // Array de tokens de espectadores
   
   // Stores y servicios
   const connectionStore = useConnectionStore()
@@ -49,6 +65,35 @@ export const useGameStore = defineStore('game', () => {
   const boardState = computed(() => {
     return board.value.map(row => [...row])
   })
+  
+  // Nuevos getters para sistema de asientos
+  const isSeated = computed(() => {
+    return seats.value.white.playerToken === connectionStore.uuid ||
+           seats.value.black.playerToken === connectionStore.uuid
+  })
+  
+  const mySeatColor = computed(() => {
+    if (seats.value.white.playerToken === connectionStore.uuid) return 'white'
+    if (seats.value.black.playerToken === connectionStore.uuid) return 'black'
+    return null
+  })
+  
+  const isSpectator = computed(() => {
+    return !isSeated.value && spectators.value.includes(connectionStore.uuid)
+  })
+  
+  const bothSeatsOccupied = computed(() => {
+    return seats.value.white.occupied && seats.value.black.occupied
+  })
+  
+  const availableSeats = computed(() => {
+    const available = []
+    if (!seats.value.white.occupied) available.push('white')
+    if (!seats.value.black.occupied) available.push('black')
+    return available
+  })
+  
+  const spectatorsCount = computed(() => spectators.value.length)
 
   // Acciones
   function selectPiece(position) {
@@ -267,11 +312,244 @@ export const useGameStore = defineStore('game', () => {
     moveHistory.value = []
     playerColor.value = 'white'
     isHost.value = false
+    
+    // Resetear asientos
+    seats.value.white.occupied = false
+    seats.value.white.playerToken = null
+    seats.value.white.playerName = null
+    seats.value.black.occupied = false
+    seats.value.black.playerToken = null
+    seats.value.black.playerName = null
+    
+    // Limpiar espectadores
+    spectators.value = []
   }
 
   function surrender() {
     gameStatus.value = 'finished'
     // TODO: Notificar al oponente
+  }
+
+  // Acciones para sistema de asientos
+  function occupySeat(color, playerToken, playerName = null) {
+    if (seats.value[color].occupied) {
+      console.log(`Asiento ${color} ya está ocupado`)
+      return false
+    }
+    
+    // Si el jugador ya está en otro asiento, liberarlo primero
+    if (seats.value.white.playerToken === playerToken) {
+      vacateSeat('white', false)
+    } else if (seats.value.black.playerToken === playerToken) {
+      vacateSeat('black', false)
+    }
+    
+    // Remover de espectadores si está allí
+    removeSpectator(playerToken, false)
+    
+    // Ocupar asiento
+    seats.value[color].occupied = true
+    seats.value[color].playerToken = playerToken
+    seats.value[color].playerName = playerName || `Jugador ${color}`
+    
+    // Si el jugador es local, actualizar playerColor
+    if (playerToken === connectionStore.uuid) {
+      playerColor.value = color
+    }
+    
+    // Verificar si el juego debe comenzar o reanudarse
+    checkGameStart()
+    
+    // Notificar a otros jugadores via WebSocket
+    if (connectionStore.isConnected) {
+      const seatData = {
+        color,
+        playerToken,
+        playerName: playerName || `Jugador ${color}`,
+        timestamp: Date.now()
+      }
+      
+      if (isHost.value) {
+        wsService.sendGameMessage(
+          connectionStore.shortToken,
+          'SEAT_OCCUPIED',
+          seatData
+        ).catch(error => {
+          console.error('Error enviando ocupación de asiento:', error)
+        })
+      } else if (connectionStore.isGuest && connectionStore.subscribedHost) {
+        wsService.sendGameMessage(
+          connectionStore.subscribedHost,
+          'SEAT_OCCUPIED',
+          seatData
+        ).catch(error => {
+          console.error('Error enviando ocupación de asiento:', error)
+        })
+      }
+    }
+    
+    return true
+  }
+  
+  function vacateSeat(color, notifyOthers = true) {
+    if (!seats.value[color].occupied) {
+      console.log(`Asiento ${color} ya está vacío`)
+      return false
+    }
+    
+    const playerToken = seats.value[color].playerToken
+    
+    // Liberar asiento
+    seats.value[color].occupied = false
+    seats.value[color].playerToken = null
+    seats.value[color].playerName = null
+    
+    // Agregar a espectadores si el jugador no se desconectó
+    if (playerToken && playerToken !== connectionStore.uuid) {
+      addSpectator(playerToken, `Ex-${color}`, false)
+    }
+    
+    // Pausar juego si solo queda un jugador
+    if (gameStatus.value === 'playing' || gameStatus.value === 'check') {
+      const occupiedCount = (seats.value.white.occupied ? 1 : 0) + (seats.value.black.occupied ? 1 : 0)
+      if (occupiedCount === 1) {
+        gameStatus.value = 'paused'
+      }
+    }
+    
+    // Notificar a otros jugadores via WebSocket
+    if (notifyOthers && connectionStore.isConnected) {
+      const seatData = {
+        color,
+        playerToken,
+        timestamp: Date.now()
+      }
+      
+      if (isHost.value) {
+        wsService.sendGameMessage(
+          connectionStore.shortToken,
+          'SEAT_VACATED',
+          seatData
+        ).catch(error => {
+          console.error('Error enviando liberación de asiento:', error)
+        })
+      } else if (connectionStore.isGuest && connectionStore.subscribedHost) {
+        wsService.sendGameMessage(
+          connectionStore.subscribedHost,
+          'SEAT_VACATED',
+          seatData
+        ).catch(error => {
+          console.error('Error enviando liberación de asiento:', error)
+        })
+      }
+    }
+    
+    return true
+  }
+  
+  function addSpectator(token, playerName = null, notifyOthers = true) {
+    if (!spectators.value.includes(token)) {
+      spectators.value.push(token)
+      
+      // Notificar a otros jugadores via WebSocket
+      if (notifyOthers && connectionStore.isConnected) {
+        const spectatorData = {
+          token,
+          playerName: playerName || `Espectador`,
+          timestamp: Date.now()
+        }
+        
+        if (isHost.value) {
+          wsService.sendGameMessage(
+            connectionStore.shortToken,
+            'SPECTATOR_JOINED',
+            spectatorData
+          ).catch(error => {
+            console.error('Error enviando unión de espectador:', error)
+          })
+        }
+      }
+    }
+  }
+  
+  function removeSpectator(token, notifyOthers = true) {
+    const index = spectators.value.indexOf(token)
+    if (index !== -1) {
+      spectators.value.splice(index, 1)
+      
+      // Notificar a otros jugadores via WebSocket
+      if (notifyOthers && connectionStore.isConnected) {
+        const spectatorData = {
+          token,
+          timestamp: Date.now()
+        }
+        
+        if (isHost.value) {
+          wsService.sendGameMessage(
+            connectionStore.shortToken,
+            'SPECTATOR_LEFT',
+            spectatorData
+          ).catch(error => {
+            console.error('Error enviando salida de espectador:', error)
+          })
+        }
+      }
+    }
+  }
+  
+  function checkGameStart() {
+    // Si ambos asientos están ocupados y el juego no ha comenzado, iniciar
+    if (bothSeatsOccupied.value && (gameStatus.value === 'waiting' || gameStatus.value === 'paused')) {
+      startGameAutomatically()
+    }
+  }
+  
+  function startGameAutomatically() {
+    gameStatus.value = 'playing'
+    currentTurn.value = 'white' // Las blancas siempre empiezan
+    
+    // Resetear tablero si es un nuevo juego
+    if (moveHistory.value.length === 0) {
+      board.value = createInitialBoard()
+    }
+    
+    selectedPiece.value = null
+    validMoves.value = []
+    
+    // Notificar a todos los jugadores
+    if (connectionStore.isConnected) {
+      const gameStartData = {
+        timestamp: Date.now(),
+        whitePlayer: seats.value.white.playerToken,
+        blackPlayer: seats.value.black.playerToken
+      }
+      
+      if (isHost.value) {
+        wsService.sendGameMessage(
+          connectionStore.shortToken,
+          'GAME_START_AUTO',
+          gameStartData
+        ).catch(error => {
+          console.error('Error enviando inicio automático de juego:', error)
+        })
+      }
+    }
+  }
+  
+  function leaveSeat() {
+    if (mySeatColor.value) {
+      return vacateSeat(mySeatColor.value)
+    }
+    return false
+  }
+  
+  function takeSeat(color) {
+    if (!connectionStore.uuid) {
+      console.log('No hay UUID para ocupar asiento')
+      return false
+    }
+    
+    return occupySeat(color, connectionStore.uuid, connectionStore.shortToken)
   }
 
   // Inicializar listeners para mensajes WebSocket
@@ -290,6 +568,12 @@ export const useGameStore = defineStore('game', () => {
           joinGame(parsedData.color)
           break
           
+        case 'GAME_START_AUTO':
+          console.log('Juego iniciado automáticamente:', parsedData)
+          gameStatus.value = 'playing'
+          currentTurn.value = 'white'
+          break
+          
         case 'MOVE':
           console.log('Movimiento remoto recibido del host:', parsedData)
           applyRemoteMove(parsedData)
@@ -299,6 +583,53 @@ export const useGameStore = defineStore('game', () => {
           console.log('Juego terminado:', parsedData)
           gameStatus.value = 'finished'
           // TODO: Mostrar resultado
+          break
+          
+        case 'SEAT_OCCUPIED':
+          console.log('Asiento ocupado recibido:', parsedData)
+          // Actualizar estado local del asiento
+          seats.value[parsedData.color].occupied = true
+          seats.value[parsedData.color].playerToken = parsedData.playerToken
+          seats.value[parsedData.color].playerName = parsedData.playerName
+          
+          // Si soy el jugador que ocupó el asiento, actualizar mi color
+          if (parsedData.playerToken === connectionStore.uuid) {
+            playerColor.value = parsedData.color
+          }
+          
+          // Verificar si el juego debe comenzar
+          checkGameStart()
+          break
+          
+        case 'SEAT_VACATED':
+          console.log('Asiento liberado recibido:', parsedData)
+          // Liberar asiento
+          seats.value[parsedData.color].occupied = false
+          seats.value[parsedData.color].playerToken = null
+          seats.value[parsedData.color].playerName = null
+          
+          // Pausar juego si solo queda un jugador
+          if (gameStatus.value === 'playing' || gameStatus.value === 'check') {
+            const occupiedCount = (seats.value.white.occupied ? 1 : 0) + (seats.value.black.occupied ? 1 : 0)
+            if (occupiedCount === 1) {
+              gameStatus.value = 'paused'
+            }
+          }
+          break
+          
+        case 'SPECTATOR_JOINED':
+          console.log('Espectador unido:', parsedData)
+          if (!spectators.value.includes(parsedData.token)) {
+            spectators.value.push(parsedData.token)
+          }
+          break
+          
+        case 'SPECTATOR_LEFT':
+          console.log('Espectador salió:', parsedData)
+          const index = spectators.value.indexOf(parsedData.token)
+          if (index !== -1) {
+            spectators.value.splice(index, 1)
+          }
           break
           
         default:
@@ -348,11 +679,19 @@ export const useGameStore = defineStore('game', () => {
     moveHistory,
     playerColor,
     isHost,
+    seats,
+    spectators,
     
     // Getters
     isMyTurn,
     winner,
     boardState,
+    isSeated,
+    mySeatColor,
+    isSpectator,
+    bothSeatsOccupied,
+    availableSeats,
+    spectatorsCount,
     
     // Acciones
     selectPiece,
@@ -361,6 +700,12 @@ export const useGameStore = defineStore('game', () => {
     startGame,
     joinGame,
     resetGame,
-    surrender
+    surrender,
+    occupySeat,
+    vacateSeat,
+    addSpectator,
+    removeSpectator,
+    leaveSeat,
+    takeSeat
   }
 })

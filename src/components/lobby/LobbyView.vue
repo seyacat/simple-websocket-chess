@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="lobby-view">
     <div class="lobby-header">
       <h2>Lobby de Ajedrez</h2>
@@ -6,7 +6,7 @@
     </div>
 
     <div class="lobby-content">
-      <!-- Sección de creación de juego -->
+      <!-- SecciÃ³n de creaciÃ³n de juego -->
       <div class="game-creation-section">
         <h3>Crear Nuevo Juego</h3>
         <div class="creation-options">
@@ -15,9 +15,9 @@
             class="create-button public-game"
             :disabled="isCreating"
           >
-            <span class="button-icon">🌐</span>
+            <span class="button-icon">ðŸŒ</span>
             <span class="button-text">
-              <strong>Juego Público</strong>
+              <strong>Juego PÃºblico</strong>
               <small>Visible en la lista para que otros se unan</small>
             </span>
           </button>
@@ -27,7 +27,7 @@
             class="create-button private-game"
             :disabled="isCreating"
           >
-            <span class="button-icon">🔒</span>
+            <span class="button-icon">ðŸ”’</span>
             <span class="button-text">
               <strong>Juego Privado</strong>
               <small>Solo con tu token compartido</small>
@@ -36,10 +36,10 @@
         </div>
       </div>
 
-      <!-- Sección de lista de hosts públicos -->
+      <!-- SecciÃ³n de lista de hosts pÃºblicos -->
       <div class="public-hosts-section">
         <div class="section-header">
-          <h3>Juegos Públicos Disponibles</h3>
+          <h3>Juegos PÃºblicos Disponibles</h3>
           <div class="refresh-controls">
             <span class="last-update">
               {{ lastUpdateText }}
@@ -55,8 +55,8 @@
         </div>
 
         <div v-if="publicHosts.length === 0" class="empty-state">
-          <p>No hay juegos públicos disponibles.</p>
-          <p>Crea uno o pide a un amigo que cree un juego público.</p>
+          <p>No hay juegos pÃºblicos disponibles.</p>
+          <p>Crea uno o pide a un amigo que cree un juego pÃºblico.</p>
         </div>
 
         <div v-else class="hosts-list">
@@ -72,12 +72,12 @@
               </div>
               <div class="host-stats">
                 <span class="stat">
-                  <span class="stat-icon">👥</span>
+                  <span class="stat-icon">ðŸ‘¥</span>
                   {{ host.subscribersCount }} jugador{{ host.subscribersCount !== 1 ? 'es' : '' }}
                 </span>
                 <span class="stat">
-                  <span class="stat-icon">🌐</span>
-                  Público
+                  <span class="stat-icon">ðŸŒ</span>
+                  PÃºblico
                 </span>
               </div>
             </div>
@@ -92,7 +92,7 @@
         </div>
       </div>
 
-      <!-- Sección de unirse con token manual -->
+      <!-- SecciÃ³n de unirse con token manual -->
       <div class="manual-join-section">
         <h3>Unirse con Token</h3>
         <div class="manual-join-form">
@@ -108,11 +108,11 @@
             class="join-button"
             :disabled="!isValidToken(manualToken) || isJoining"
           >
-            {{ isJoining ? 'Uniéndose...' : 'Unirse' }}
+            {{ isJoining ? 'UniÃ©ndose...' : 'Unirse' }}
           </button>
         </div>
         <p class="help-text">
-          Pídele al host que te comparta su token para unirte a su juego privado.
+          PÃ­dele al host que te comparta su token para unirte a su juego privado.
         </p>
       </div>
     </div>
@@ -126,7 +126,7 @@
     <!-- Mensajes de error -->
     <div v-if="errorMessage" class="error-message">
       {{ errorMessage }}
-      <button @click="clearError" class="dismiss-button">×</button>
+      <button @click="clearError" class="dismiss-button">Ã—</button>
     </div>
   </div>
 </template>
@@ -163,12 +163,12 @@ const lastUpdateText = computed(() => {
 
 const loadingMessage = computed(() => {
   if (isCreating.value) return 'Creando juego...'
-  if (isJoining.value) return 'Uniéndose al juego...'
+  if (isJoining.value) return 'UniÃ©ndose al juego...'
   if (isRefreshing.value) return 'Actualizando lista...'
   return ''
 })
 
-// Métodos
+// MÃ©todos
 const isValidToken = (token) => {
   return token && token.trim().length >= 4 && /^[A-Za-z0-9]+$/.test(token.trim())
 }
@@ -181,10 +181,10 @@ const createPublicGame = async () => {
   
   try {
     await wsService.setMode('host', 'public')
-    // La transición a la vista de host-waiting se manejará en App.vue
+    // La transiciÃ³n a la vista de host-waiting se manejarÃ¡ en App.vue
     // basado en el cambio de estado en connectionStore
   } catch (error) {
-    errorMessage.value = `Error al crear juego público: ${error.message}`
+    errorMessage.value = `Error al crear juego pÃºblico: ${error.message}`
     console.error('Error creating public game:', error)
   } finally {
     isCreating.value = false
@@ -199,7 +199,7 @@ const createPrivateGame = async () => {
   
   try {
     await wsService.setMode('host', 'private')
-    // La transición a la vista de host-waiting se manejará en App.vue
+    // La transiciÃ³n a la vista de host-waiting se manejarÃ¡ en App.vue
   } catch (error) {
     errorMessage.value = `Error al crear juego privado: ${error.message}`
     console.error('Error creating private game:', error)
@@ -221,7 +221,7 @@ const joinGame = async (hostToken) => {
     // Luego suscribirse al host
     await wsService.subscribeToHost(hostToken)
     
-    // La transición a la vista de guest-waiting se manejará en App.vue
+    // La transiciÃ³n a la vista de guest-waiting se manejarÃ¡ en App.vue
   } catch (error) {
     errorMessage.value = `Error al unirse al juego: ${error.message}`
     console.error('Error joining game:', error)
@@ -235,7 +235,7 @@ const joinGame = async (hostToken) => {
 const joinWithManualToken = async () => {
   const token = manualToken.value.trim()
   if (!isValidToken(token)) {
-    errorMessage.value = 'Token inválido. Debe tener al menos 4 caracteres alfanuméricos.'
+    errorMessage.value = 'Token invÃ¡lido. Debe tener al menos 4 caracteres alfanumÃ©ricos.'
     return
   }
   
@@ -281,13 +281,13 @@ const stopAutoRefresh = () => {
 
 // Lifecycle hooks
 onMounted(() => {
-  // Cargar lista inicial de hosts públicos
+  // Cargar lista inicial de hosts pÃºblicos
   if (connectionStore.isConnected) {
     refreshPublicHosts()
     startAutoRefresh()
   }
   
-  // Escuchar cambios en conexión para manejar auto-refresh
+  // Escuchar cambios en conexiÃ³n para manejar auto-refresh
   const unsubscribe = connectionStore.$subscribe(() => {
     if (connectionStore.isConnected && !refreshInterval.value) {
       refreshPublicHosts()
@@ -323,11 +323,11 @@ onUnmounted(() => {
 
 .lobby-header h2 {
   margin: 0 0 10px 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .subtitle {
-  color: #666;
+  color: var(--color-text-secondary);
   margin: 0;
 }
 </style>
@@ -340,10 +340,10 @@ onUnmounted(() => {
 .game-creation-section,
 .public-hosts-section,
 .manual-join-section {
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 10px;
   padding: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .game-creation-section h3,
@@ -351,7 +351,7 @@ onUnmounted(() => {
 .manual-join-section h3 {
   margin-top: 0;
   margin-bottom: 15px;
-  color: #333;
+  color: var(--color-text);
 }
 
 .creation-options {
@@ -367,7 +367,7 @@ onUnmounted(() => {
   padding: 20px;
   border: 2px solid transparent;
   border-radius: 8px;
-  background: #f8f9fa;
+  background: var(--color-surface);
   cursor: pointer;
   transition: all 0.2s;
   text-align: left;
@@ -375,7 +375,7 @@ onUnmounted(() => {
 
 .create-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .create-button:disabled {
@@ -384,19 +384,19 @@ onUnmounted(() => {
 }
 
 .public-game {
-  border-color: #4CAF50;
+  border-color: var(--color-success);
 }
 
 .public-game:hover:not(:disabled) {
-  background: #e8f5e9;
+  background: rgba(76, 175, 80, 0.1);
 }
 
 .private-game {
-  border-color: #2196F3;
+  border-color: var(--color-info);
 }
 
 .private-game:hover:not(:disabled) {
-  background: #e3f2fd;
+  background: rgba(33, 150, 243, 0.1);
 }
 
 .button-icon {
@@ -410,13 +410,13 @@ onUnmounted(() => {
 
 .button-text strong {
   font-size: 16px;
-  color: #333;
+  color: var(--color-text);
   margin-bottom: 5px;
 }
 
 .button-text small {
   font-size: 12px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .section-header {
@@ -434,13 +434,13 @@ onUnmounted(() => {
 
 .last-update {
   font-size: 12px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .refresh-button {
   padding: 5px 15px;
-  background: #6c757d;
-  color: white;
+  background: var(--color-button-secondary);
+  color: var(--color-text-on-primary);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -448,7 +448,7 @@ onUnmounted(() => {
 }
 
 .refresh-button:hover:not(:disabled) {
-  background: #5a6268;
+  background: var(--color-button-secondary-hover);
 }
 
 .refresh-button:disabled {
@@ -459,7 +459,7 @@ onUnmounted(() => {
 .empty-state {
   text-align: center;
   padding: 40px 20px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .empty-state p {
@@ -477,9 +477,9 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 15px;
-  background: #f8f9fa;
+  background: var(--color-surface);
   border-radius: 8px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--color-border);
 }
 
 .host-info {
@@ -495,12 +495,12 @@ onUnmounted(() => {
 
 .token-label {
   font-weight: bold;
-  color: #333;
+  color: var(--color-text);
 }
 
 .token-value {
   font-family: monospace;
-  background: #e9ecef;
+  background: var(--color-surface-variant);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 14px;
@@ -516,7 +516,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 5px;
   font-size: 14px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .stat-icon {
@@ -525,8 +525,8 @@ onUnmounted(() => {
 
 .join-button {
   padding: 8px 20px;
-  background: #28a745;
-  color: white;
+  background: var(--color-button-success);
+  color: var(--color-text-on-primary);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -534,7 +534,7 @@ onUnmounted(() => {
 }
 
 .join-button:hover:not(:disabled) {
-  background: #218838;
+  background: var(--color-button-success-hover);
 }
 
 .join-button:disabled {
@@ -551,20 +551,20 @@ onUnmounted(() => {
 .token-input {
   flex: 1;
   padding: 10px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 16px;
 }
 
 .token-input:focus {
   outline: none;
-  border-color: #80bdff;
+  border-color: var(--color-primary-light);
   box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
 }
 
 .help-text {
   font-size: 14px;
-  color: #666;
+  color: var(--color-text-secondary);
   margin: 0;
 }
 
@@ -574,7 +574,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-overlay-light);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -585,8 +585,8 @@ onUnmounted(() => {
 .loading-spinner {
   width: 50px;
   height: 50px;
-  border: 5px solid #f3f3f3;
-  border-top: 5px solid #3498db;
+  border: 5px solid var(--color-surface);
+  border-top: 5px solid var(--color-info);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 20px;
@@ -601,8 +601,8 @@ onUnmounted(() => {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  background: #dc3545;
-  color: white;
+  background: var(--color-button-danger);
+  color: var(--color-text-on-primary);
   padding: 15px 20px;
   border-radius: 8px;
   display: flex;
@@ -610,14 +610,14 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 15px;
   max-width: 400px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
   z-index: 1000;
 }
 
 .dismiss-button {
   background: none;
   border: none;
-  color: white;
+  color: var(--color-text-on-primary);
   font-size: 20px;
   cursor: pointer;
   padding: 0;
@@ -659,3 +659,4 @@ onUnmounted(() => {
   }
 }
   
+

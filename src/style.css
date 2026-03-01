@@ -1,11 +1,18 @@
+/* Estilos base de la aplicación
+ * Complementa el sistema de temas en theme.css
+ */
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
+  /* Configuración de tema - respeta prefers-color-scheme */
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  
+  /* Usar variables CSS en lugar de colores hardcodeados */
+  color: var(--color-text);
+  background-color: var(--color-background);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,11 +22,11 @@
 
 a {
   font-weight: 500;
-  color: #646cff;
+  color: var(--color-primary);
   text-decoration: inherit;
 }
 a:hover {
-  color: #535bf2;
+  color: var(--color-primary-dark);
 }
 
 body {
@@ -28,34 +35,70 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background-color: var(--color-background);
 }
 
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
+  color: var(--color-text);
+}
+
+h2, h3, h4, h5, h6 {
+  color: var(--color-text);
 }
 
 button {
-  border-radius: 8px;
+  border-radius: var(--border-radius-md);
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: var(--color-button-secondary);
+  color: var(--color-button-secondary-text);
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: all 0.25s;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: var(--color-primary);
+  background-color: var(--color-button-secondary-hover);
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* Botones específicos - se pueden sobrescribir en componentes */
+button.primary {
+  background-color: var(--color-button-primary);
+  color: var(--color-button-primary-text);
+}
+button.primary:hover {
+  background-color: var(--color-button-primary-hover);
+}
+
+button.success {
+  background-color: var(--color-button-success);
+  color: var(--color-button-success-text);
+}
+button.success:hover {
+  background-color: var(--color-button-success-hover);
+}
+
+button.danger {
+  background-color: var(--color-button-danger);
+  color: var(--color-button-danger-text);
+}
+button.danger:hover {
+  background-color: var(--color-button-danger-hover);
+}
+
 .card {
   padding: 2em;
+  background-color: var(--color-card-bg);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 #app {
@@ -63,17 +106,45 @@ button:focus-visible {
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  width: 100%;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+/* Mejoras de accesibilidad y legibilidad */
+code, pre {
+  font-family: 'Courier New', Courier, monospace;
+  background-color: var(--color-surface-variant);
+  padding: 2px 6px;
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-dark);
+}
+
+/* Media queries para responsividad */
+@media (max-width: 768px) {
+  #app {
+    padding: 1rem;
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
+  
+  h1 {
+    font-size: 2.5em;
   }
 }
+
+/* Las reglas específicas de tema claro/oscuro ahora están en theme.css */

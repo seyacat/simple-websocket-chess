@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="guest-waiting-view">
     <div class="header">
       <h2>Esperando al Host</h2>
@@ -6,10 +6,10 @@
     </div>
 
     <div class="content">
-      <!-- Información del host -->
+      <!-- InformaciÃ³n del host -->
       <div class="host-info-card">
         <div class="info-section">
-          <h3>Información del Juego</h3>
+          <h3>InformaciÃ³n del Juego</h3>
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">Tu Token:</span>
@@ -37,25 +37,25 @@
           </div>
           
           <p class="help-text">
-            Esperando a que el host inicie el juego. El juego comenzará automáticamente cuando el host haga clic en "Iniciar Juego".
+            Esperando a que el host inicie el juego. El juego comenzarÃ¡ automÃ¡ticamente cuando el host haga clic en "Iniciar Juego".
           </p>
         </div>
       </div>
 
       <!-- Mensaje de espera -->
       <div class="waiting-message">
-        <div class="waiting-icon">⏳</div>
+        <div class="waiting-icon">â³</div>
         <h3>Esperando que el host inicie el juego...</h3>
         <p>
           El host <strong>{{ connectionStore.subscribedHost }}</strong> debe iniciar el juego.
-          Una vez que lo haga, el juego comenzará automáticamente.
+          Una vez que lo haga, el juego comenzarÃ¡ automÃ¡ticamente.
         </p>
         <div class="waiting-tips">
           <p><strong>Consejos:</strong></p>
           <ul>
-            <li>Asegúrate de tener una conexión estable a internet</li>
-            <li>El juego puede tardar unos segundos en comenzar después de que el host lo inicie</li>
-            <li>Si el host se desconecta, serás redirigido al lobby automáticamente</li>
+            <li>AsegÃºrate de tener una conexiÃ³n estable a internet</li>
+            <li>El juego puede tardar unos segundos en comenzar despuÃ©s de que el host lo inicie</li>
+            <li>Si el host se desconecta, serÃ¡s redirigido al lobby automÃ¡ticamente</li>
           </ul>
         </div>
       </div>
@@ -80,7 +80,7 @@
     <!-- Notificaciones -->
     <div v-if="notification" class="notification" :class="notification.type">
       <span>{{ notification.message }}</span>
-      <button @click="clearNotification" class="dismiss-button">×</button>
+      <button @click="clearNotification" class="dismiss-button">Ã—</button>
     </div>
 
     <!-- Estado de carga -->
@@ -113,7 +113,7 @@ const hostStatusClass = computed(() => {
   return hostConnected.value ? 'connected' : 'disconnected'
 })
 
-// Métodos
+// MÃ©todos
 const disconnect = async () => {
   if (isDisconnecting.value) return
   
@@ -126,7 +126,7 @@ const disconnect = async () => {
     // Cambiar a modo null para volver al lobby
     await wsService.setMode(null)
     
-    // El cambio a la vista de lobby se manejará en App.vue
+    // El cambio a la vista de lobby se manejarÃ¡ en App.vue
   } catch (error) {
     console.error('Error disconnecting:', error)
     showNotification('error', `Error al desconectar: ${error.message}`)
@@ -137,7 +137,7 @@ const disconnect = async () => {
 const showNotification = (type, message) => {
   notification.value = { type, message }
   
-  // Auto-ocultar después de 5 segundos
+  // Auto-ocultar despuÃ©s de 5 segundos
   setTimeout(() => {
     if (notification.value && notification.value.message === message) {
       clearNotification()
@@ -151,17 +151,17 @@ const clearNotification = () => {
 
 const handleHostDisconnected = (data) => {
   hostConnected.value = false
-  showNotification('error', `El host ${data.host} se ha desconectado. Serás redirigido al lobby.`)
+  showNotification('error', `El host ${data.host} se ha desconectado. SerÃ¡s redirigido al lobby.`)
   
-  // Redirigir al lobby después de 3 segundos
+  // Redirigir al lobby despuÃ©s de 3 segundos
   setTimeout(() => {
     disconnect()
   }, 3000)
 }
 
 const handleGameStart = (data) => {
-  showNotification('success', '¡El juego ha comenzado!')
-  // El cambio a la vista de juego se manejará en App.vue
+  showNotification('success', 'Â¡El juego ha comenzado!')
+  // El cambio a la vista de juego se manejarÃ¡ en App.vue
   // basado en el cambio de estado en gameStore
 }
 
@@ -202,11 +202,11 @@ onUnmounted(() => {
 
 .header h2 {
   margin: 0 0 10px 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .subtitle {
-  color: #666;
+  color: var(--color-text-secondary);
   margin: 0;
 }
 
@@ -219,17 +219,17 @@ onUnmounted(() => {
 .host-info-card,
 .waiting-message,
 .controls {
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 10px;
   padding: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .info-section h3,
 .waiting-message h3 {
   margin-top: 0;
   margin-bottom: 15px;
-  color: #333;
+  color: var(--color-text);
 }
 
 .info-grid {
@@ -247,13 +247,13 @@ onUnmounted(() => {
 
 .info-label {
   font-weight: bold;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 
 .info-value {
   font-size: 16px;
-  color: #333;
+  color: var(--color-text);
 }
 
 .token-display,
@@ -266,7 +266,7 @@ onUnmounted(() => {
 .token-value,
 .host-token {
   font-family: monospace;
-  background: #e9ecef;
+  background: var(--color-surface-variant);
   padding: 8px 12px;
   border-radius: 4px;
   font-size: 16px;
@@ -282,14 +282,14 @@ onUnmounted(() => {
 }
 
 .host-status.connected {
-  background: #d4edda;
-  color: #155724;
+  background: rgba(52, 206, 87, 0.15);
+  color: var(--color-success-dark);
   border: 1px solid #c3e6cb;
 }
 
 .host-status.disconnected {
-  background: #f8d7da;
-  color: #721c24;
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--color-error-dark);
   border: 1px solid #f5c6cb;
 }
 
@@ -302,14 +302,14 @@ onUnmounted(() => {
 }
 
 .status-badge.waiting {
-  background: #fff3cd;
-  color: #856404;
+  background: rgba(255, 212, 59, 0.15);
+  color: var(--color-warning-dark);
   border: 1px solid #ffeaa7;
 }
 
 .help-text {
   font-size: 14px;
-  color: #666;
+  color: var(--color-text-secondary);
   margin: 10px 0 0 0;
   line-height: 1.5;
 }
@@ -331,12 +331,12 @@ onUnmounted(() => {
 }
 
 .waiting-message h3 {
-  color: #333;
+  color: var(--color-text);
   margin-bottom: 10px;
 }
 
 .waiting-message p {
-  color: #666;
+  color: var(--color-text-secondary);
   line-height: 1.6;
   max-width: 600px;
   margin: 0 auto 20px auto;
@@ -344,7 +344,7 @@ onUnmounted(() => {
 
 .waiting-tips {
   text-align: left;
-  background: #f8f9fa;
+  background: var(--color-surface);
   padding: 15px;
   border-radius: 8px;
   border: 1px solid #dee2e6;
@@ -354,13 +354,13 @@ onUnmounted(() => {
 .waiting-tips p {
   margin: 0 0 10px 0;
   font-weight: bold;
-  color: #333;
+  color: var(--color-text);
 }
 
 .waiting-tips ul {
   margin: 0;
   padding-left: 20px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .waiting-tips li {
@@ -374,8 +374,8 @@ onUnmounted(() => {
 
 .disconnect-button {
   padding: 15px 30px;
-  background: #dc3545;
-  color: white;
+  background: var(--color-button-danger);
+  color: var(--color-text-on-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -386,7 +386,7 @@ onUnmounted(() => {
 }
 
 .disconnect-button:hover:not(:disabled) {
-  background: #c82333;
+  background: var(--color-button-danger-hover);
   transform: translateY(-2px);
 }
 
@@ -398,7 +398,7 @@ onUnmounted(() => {
 
 .disconnect-help {
   font-size: 14px;
-  color: #666;
+  color: var(--color-text-secondary);
   margin: 0;
   line-height: 1.5;
 }
@@ -414,32 +414,32 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 15px;
   max-width: 400px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
   z-index: 1000;
   animation: slideIn 0.3s ease-out;
 }
 
 .notification.success {
-  background: #d4edda;
-  color: #155724;
+  background: rgba(52, 206, 87, 0.15);
+  color: var(--color-success-dark);
   border: 1px solid #c3e6cb;
 }
 
 .notification.error {
-  background: #f8d7da;
-  color: #721c24;
+  background: rgba(231, 76, 60, 0.15);
+  color: var(--color-error-dark);
   border: 1px solid #f5c6cb;
 }
 
 .notification.info {
-  background: #d1ecf1;
+  background: rgba(57, 192, 237, 0.15);
   color: #0c5460;
   border: 1px solid #bee5eb;
 }
 
 .notification.warning {
-  background: #fff3cd;
-  color: #856404;
+  background: rgba(255, 212, 59, 0.15);
+  color: var(--color-warning-dark);
   border: 1px solid #ffeaa7;
 }
 

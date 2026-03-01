@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="host-game-view">
     <div class="header">
       <h2>Esperando Jugadores</h2>
@@ -6,10 +6,10 @@
     </div>
 
     <div class="content">
-      <!-- Información del host -->
+      <!-- InformaciÃ³n del host -->
       <div class="host-info-card">
         <div class="info-section">
-          <h3>Tu Información</h3>
+          <h3>Tu InformaciÃ³n</h3>
           <div class="info-grid">
             <div class="info-item">
               <span class="info-label">Token:</span>
@@ -28,7 +28,7 @@
             <div class="info-item">
               <span class="info-label">Visibilidad:</span>
               <span class="info-value visibility-badge" :class="visibilityClass">
-                {{ connectionStore.visibility === 'public' ? 'Público' : 'Privado' }}
+                {{ connectionStore.visibility === 'public' ? 'PÃºblico' : 'Privado' }}
               </span>
             </div>
             
@@ -41,7 +41,7 @@
           </div>
           
           <p class="help-text" v-if="connectionStore.visibility === 'public'">
-            Tu juego aparece en la lista pública del lobby. Los jugadores pueden unirse directamente.
+            Tu juego aparece en la lista pÃºblica del lobby. Los jugadores pueden unirse directamente.
           </p>
           <p class="help-text" v-else>
             Tu juego es privado. Comparte tu token con los jugadores para que se unan.
@@ -61,7 +61,7 @@
         <div v-if="connectionStore.subscribersCount === 0" class="empty-state">
           <p>Esperando que los jugadores se unan...</p>
           <p v-if="connectionStore.visibility === 'public'">
-            Los jugadores pueden encontrarte en la lista pública del lobby.
+            Los jugadores pueden encontrarte en la lista pÃºblica del lobby.
           </p>
           <p v-else>
             Comparte tu token <strong>{{ connectionStore.shortToken }}</strong> con los jugadores.
@@ -75,7 +75,7 @@
             class="player-card"
           >
             <div class="player-info">
-              <span class="player-icon">👤</span>
+              <span class="player-icon">ðŸ‘¤</span>
               <span class="player-token">{{ player }}</span>
             </div>
             <span class="player-status">Conectado</span>
@@ -105,7 +105,7 @@
             >
               <span v-if="isChangingVisibility">Cambiando...</span>
               <span v-else>
-                {{ connectionStore.visibility === 'public' ? 'Hacer Privado' : 'Hacer Público' }}
+                {{ connectionStore.visibility === 'public' ? 'Hacer Privado' : 'Hacer PÃºblico' }}
               </span>
             </button>
             
@@ -129,7 +129,7 @@
     <!-- Notificaciones -->
     <div v-if="notification" class="notification" :class="notification.type">
       <span>{{ notification.message }}</span>
-      <button @click="clearNotification" class="dismiss-button">×</button>
+      <button @click="clearNotification" class="dismiss-button">Ã—</button>
     </div>
 
     <!-- Estado de carga -->
@@ -173,11 +173,11 @@ const loadingMessage = computed(() => {
   return ''
 })
 
-// Métodos
+// MÃ©todos
 const copyToken = async () => {
   try {
     await navigator.clipboard.writeText(connectionStore.shortToken)
-    copyButtonText.value = '¡Copiado!'
+    copyButtonText.value = 'Â¡Copiado!'
     setTimeout(() => {
       copyButtonText.value = 'Copiar'
     }, 2000)
@@ -198,7 +198,7 @@ const startGame = async () => {
     // Iniciar juego en el GameStore
     await gameStore.startGame()
     
-    // El cambio a la vista de juego se manejará en App.vue
+    // El cambio a la vista de juego se manejarÃ¡ en App.vue
     // basado en el cambio de estado en gameStore
   } catch (error) {
     console.error('Error starting game:', error)
@@ -217,7 +217,7 @@ const changeVisibility = async () => {
     const newVisibility = connectionStore.visibility === 'public' ? 'private' : 'public'
     await wsService.setMode('host', newVisibility)
     
-    showNotification('success', `Juego ahora es ${newVisibility === 'public' ? 'público' : 'privado'}`)
+    showNotification('success', `Juego ahora es ${newVisibility === 'public' ? 'pÃºblico' : 'privado'}`)
   } catch (error) {
     console.error('Error changing visibility:', error)
     showNotification('error', `Error al cambiar visibilidad: ${error.message}`)
@@ -235,7 +235,7 @@ const cancelGame = async () => {
     // Cambiar a modo null para volver al lobby
     await wsService.setMode(null)
     
-    // El cambio a la vista de lobby se manejará en App.vue
+    // El cambio a la vista de lobby se manejarÃ¡ en App.vue
   } catch (error) {
     console.error('Error canceling game:', error)
     showNotification('error', `Error al cancelar el juego: ${error.message}`)
@@ -247,7 +247,7 @@ const cancelGame = async () => {
 const showNotification = (type, message) => {
   notification.value = { type, message }
   
-  // Auto-ocultar después de 5 segundos
+  // Auto-ocultar despuÃ©s de 5 segundos
   setTimeout(() => {
     if (notification.value && notification.value.message === message) {
       clearNotification()
@@ -287,11 +287,11 @@ onMounted(() => {
 
 .header h2 {
   margin: 0 0 10px 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .subtitle {
-  color: #666;
+  color: var(--color-text-secondary);
   margin: 0;
 }
 
@@ -304,10 +304,10 @@ onMounted(() => {
 .host-info-card,
 .players-section,
 .game-controls {
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 10px;
   padding: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .info-section h3,
@@ -315,7 +315,7 @@ onMounted(() => {
 .controls-section h3 {
   margin-top: 0;
   margin-bottom: 15px;
-  color: #333;
+  color: var(--color-text);
 }
 
 .info-grid {
@@ -334,13 +334,13 @@ onMounted(() => {
 
 .info-label {
   font-weight: bold;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 
 .info-value {
   font-size: 16px;
-  color: #333;
+  color: var(--color-text);
 }
 
 .token-display {
@@ -351,7 +351,7 @@ onMounted(() => {
 
 .token-value {
   font-family: monospace;
-  background: #e9ecef;
+  background: var(--color-surface-variant);
   padding: 8px 12px;
   border-radius: 4px;
   font-size: 16px;
@@ -360,8 +360,8 @@ onMounted(() => {
 
 .copy-button {
   padding: 8px 15px;
-  background: #6c757d;
-  color: white;
+  background: var(--color-button-secondary);
+  color: var(--color-text-on-primary);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -369,7 +369,7 @@ onMounted(() => {
 }
 
 .copy-button:hover {
-  background: #5a6268;
+  background: var(--color-button-secondary-hover);
 }
 
 .visibility-badge {
@@ -381,26 +381,26 @@ onMounted(() => {
 }
 
 .visibility-badge.public {
-  background: #d4edda;
-  color: #155724;
+  background: rgba(52, 206, 87, 0.15);
+  color: var(--color-success-dark);
   border: 1px solid #c3e6cb;
 }
 
 .visibility-badge.private {
-  background: #d1ecf1;
-  color: #0c5460;
+  background: rgba(57, 192, 237, 0.15);
+  color: var(--color-info-dark);
   border: 1px solid #bee5eb;
 }
 
 .players-count {
   font-size: 24px;
   font-weight: bold;
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .help-text {
   font-size: 14px;
-  color: #666;
+  color: var(--color-text-secondary);
   margin: 10px 0 0 0;
   line-height: 1.5;
 }
@@ -413,8 +413,8 @@ onMounted(() => {
 }
 
 .players-count-badge {
-  background: #28a745;
-  color: white;
+  background: var(--color-button-success);
+  color: var(--color-text-on-primary);
   padding: 5px 15px;
   border-radius: 20px;
   font-weight: bold;
@@ -424,7 +424,7 @@ onMounted(() => {
 .empty-state {
   text-align: center;
   padding: 40px 20px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .empty-state p {
@@ -442,7 +442,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 15px;
-  background: #f8f9fa;
+  background: var(--color-surface);
   border-radius: 8px;
   border: 1px solid #dee2e6;
 }
@@ -460,11 +460,11 @@ onMounted(() => {
 .player-token {
   font-family: monospace;
   font-weight: bold;
-  color: #333;
+  color: var(--color-text);
 }
 
 .player-status {
-  color: #28a745;
+  color: var(--color-success);
   font-weight: bold;
   font-size: 14px;
 }
@@ -489,28 +489,28 @@ onMounted(() => {
 }
 
 .start-game-button {
-  background: #28a745;
-  color: white;
+  background: var(--color-button-success);
+  color: var(--color-text-on-primary);
 }
 
 .start-game-button:hover:not(:disabled) {
-  background: #218838;
+  background: var(--color-button-success-hover);
   transform: translateY(-2px);
 }
 
 .visibility-button {
-  background: #17a2b8;
-  color: white;
+  background: var(--color-button-info);
+  color: var(--color-text-on-primary);
 }
 
 .visibility-button:hover:not(:disabled) {
-  background: #138496;
+  background: var(--color-button-info-hover);
   transform: translateY(-2px);
 }
 
 .cancel-button {
-  background: #dc3545;
-  color: white;
+  background: var(--color-button-danger);
+  color: var(--color-text-on-primary);
 }
 
 .cancel-button:hover:not(:disabled) {
@@ -556,8 +556,8 @@ onMounted(() => {
 }
 
 .notification.success {
-  background: #d4edda;
-  color: #155724;
+  background: rgba(52, 206, 87, 0.15);
+  color: var(--color-success-dark);
   border: 1px solid #c3e6cb;
 }
 
@@ -568,8 +568,8 @@ onMounted(() => {
 }
 
 .notification.info {
-  background: #d1ecf1;
-  color: #0c5460;
+  background: rgba(57, 192, 237, 0.15);
+  color: var(--color-info-dark);
   border: 1px solid #bee5eb;
 }
 
@@ -655,3 +655,4 @@ onMounted(() => {
     width: 100%;
   }
 }
+

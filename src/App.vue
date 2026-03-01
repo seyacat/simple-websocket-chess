@@ -1,9 +1,6 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
-import ConnectionPanel from './components/connection/ConnectionPanel.vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import LobbyView from './components/lobby/LobbyView.vue'
-import HostGameView from './components/lobby/HostGameView.vue'
-import GuestWaitingView from './components/lobby/GuestWaitingView.vue'
 import PhaserChessGame from './components/chess/PhaserChessGame.vue'
 import { useGameStore } from './stores/gameStore'
 import { useConnectionStore } from '@/stores/connectionStore'
@@ -17,7 +14,8 @@ const wsService = getWebSocketService()
 // Estado local
 const showGameControls = ref(true)
 const boardSize = ref(600)
-const currentView = ref('lobby') // 'lobby', 'host-waiting', 'guest-waiting', 'game'
+const currentView = ref('lobby') // 'lobby', 'game'
+const isConnecting = ref(false)
 
 // Computed
 const gameTitle = computed(() => {
@@ -27,11 +25,15 @@ const gameTitle = computed(() => {
   
   switch (currentView.value) {
     case 'lobby':
+      if (!connectionStore.isConnected) {
+        return 'Lobby de Ajedrez - Conectando...'
+      }
       return 'Lobby de Ajedrez'
-    case 'host-waiting':
-      return 'Esperando Jugadores (Host)'
-    case 'guest-waiting':
-      return 'Esperando Inicio (Guest)'
+    case 'game':
+      if (gameStore.gameStatus === 'paused') {
+        return 'Ajedrez - Juego en pausa'
+      }
+      return 'Ajedrez - Configurando asientos'
     default:
       return 'Ajedrez con WebSocket'
   }
@@ -44,18 +46,27 @@ const playerInfo = computed(() => {
   
   switch (currentView.value) {
     case 'lobby':
+      if (!connectionStore.isConnected) {
+        return 'Conectando al servidor...'
+      }
       return 'Selecciona o crea un juego para comenzar'
-    case 'host-waiting':
-      return `Host - Token: ${connectionStore.shortToken}`
-    case 'guest-waiting':
-      return `Guest - Conectado a: ${connectionStore.subscribedHost}`
+    case 'game':
+      if (gameStore.isSeated) {
+        return `Jugador (${gameStore.mySeatColor === 'white' ? 'Blancas' : 'Negras'})`
+      } else if (gameStore.isSpectator) {
+        return `Espectador (${gameStore.spectatorsCount} total)`
+      } else {
+        return 'Selecciona un asiento para jugar'
+      }
     default:
-      return 'Configura la conexión para comenzar'
+      return 'Conectando al servidor...'
   }
 })
 
 const canShowGame = computed(() => {
-  return connectionStore.isConnected && gameStore.gameStatus !== 'waiting'
+  // Siempre mostrar el juego cuando estamos en la vista de juego
+  // El overlay de selección de asientos manejará la interacción
+  return currentView.value === 'game'
 })
 
 // Determinar vista actual basada en estado
@@ -65,22 +76,34 @@ const determineCurrentView = () => {
     return
   }
 
-  if (gameStore.gameStatus === 'playing') {
-    currentView.value = 'game'
+  // Si está conectado pero no tiene modo (no es host ni guest), mostrar lobby
+  if (!connectionStore.mode) {
+    currentView.value = 'lobby'
     return
   }
 
-  if (connectionStore.mode === 'host') {
-    currentView.value = 'host-waiting'
+  // Si es host o guest, ir al juego (tablero con selección de asientos)
+  // El sistema de asientos manejará si el usuario es jugador o espectador
+  currentView.value = 'game'
+}
+
+// Conectar automáticamente al WebSocket
+const autoConnect = async () => {
+  if (connectionStore.isConnected || isConnecting.value) {
     return
   }
-
-  if (connectionStore.mode === 'guest') {
-    currentView.value = 'guest-waiting'
-    return
+  
+  isConnecting.value = true
+  try {
+    console.log('Conectando automáticamente al servidor WebSocket...')
+    await wsService.connect()
+    console.log('Conexión WebSocket establecida automáticamente')
+  } catch (error) {
+    console.error('Error al conectar automáticamente:', error)
+    // El servicio de WebSocket manejará la reconexión automática
+  } finally {
+    isConnecting.value = false
   }
-
-  currentView.value = 'lobby'
 }
 
 // Watchers para cambios de estado
@@ -118,6 +141,11 @@ wsService.on('host_disconnected', () => {
     }, 3000)
   }
 })
+
+// Conectar automáticamente al montar el componente
+onMounted(() => {
+  autoConnect()
+})
 </script>
 
 <template>
@@ -133,12 +161,19 @@ wsService.on('host_disconnected', () => {
         </div>
         
         <div v-if="currentView !== 'lobby'" class="status-item">
-          <button 
+          <button
             @click="connectionStore.setMode(null); connectionStore.setSubscribedHost(null); currentView = 'lobby'"
             class="back-to-lobby-button"
           >
             Volver al Lobby
           </button>
+        </div>
+      </div>
+      
+      <div v-else class="connection-status-bar">
+        <div class="status-item">
+          <span class="status-label">Estado:</span>
+          <span class="status-value">{{ isConnecting ? 'Conectando...' : 'Desconectado' }}</span>
         </div>
       </div>
     </header>
@@ -151,25 +186,30 @@ wsService.on('host_disconnected', () => {
         </div>
         
         <div class="connection-status-panel">
-          <ConnectionPanel />
+          <div class="connection-status-info">
+            <h4>Estado de Conexión</h4>
+            <div class="status-item">
+              <span class="status-label">Servidor:</span>
+              <span class="status-value">{{ connectionStore.isConnected ? 'Conectado' : 'Desconectado' }}</span>
+            </div>
+            <div class="status-item" v-if="connectionStore.isConnected">
+              <span class="status-label">Token:</span>
+              <code class="status-value">{{ connectionStore.shortToken }}</code>
+            </div>
+            <div class="status-item" v-if="!connectionStore.isConnected && !isConnecting">
+              <button @click="autoConnect" class="reconnect-button">
+                Reconectar
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-
-      <!-- Vista de Host esperando -->
-      <div v-else-if="currentView === 'host-waiting'" class="host-waiting-container">
-        <HostGameView />
-      </div>
-
-      <!-- Vista de Guest esperando -->
-      <div v-else-if="currentView === 'guest-waiting'" class="guest-waiting-container">
-        <GuestWaitingView />
       </div>
 
       <!-- Vista de Juego -->
       <div v-else-if="currentView === 'game'" class="game-container">
         <div class="game-area">
           <div class="phaser-container" :class="{ 'game-active': canShowGame }">
-            <PhaserChessGame 
+            <PhaserChessGame
               v-if="canShowGame"
               :board-size="boardSize"
               class="chess-game"
@@ -181,9 +221,9 @@ wsService.on('host_disconnected', () => {
                 <div class="placeholder-board">
                   <div class="board-grid">
                     <div v-for="row in 8" :key="row" class="board-row">
-                      <div 
-                        v-for="col in 8" 
-                        :key="col" 
+                      <div
+                        v-for="col in 8"
+                        :key="col"
                         class="board-square"
                         :class="{ 'light': (row + col) % 2 === 0, 'dark': (row + col) % 2 !== 0 }"
                       ></div>
@@ -195,7 +235,22 @@ wsService.on('host_disconnected', () => {
           </div>
 
           <div class="control-panel">
-            <ConnectionPanel class="connection-panel" />
+            <div class="connection-status-info">
+              <h4>Estado de Conexión</h4>
+              <div class="status-item">
+                <span class="status-label">Servidor:</span>
+                <span class="status-value">{{ connectionStore.isConnected ? 'Conectado' : 'Desconectado' }}</span>
+              </div>
+              <div class="status-item" v-if="connectionStore.isConnected">
+                <span class="status-label">Token:</span>
+                <code class="status-value">{{ connectionStore.shortToken }}</code>
+              </div>
+              <div class="status-item" v-if="!connectionStore.isConnected && !isConnecting">
+                <button @click="autoConnect" class="reconnect-button">
+                  Reconectar
+                </button>
+              </div>
+            </div>
             
             <div v-if="gameStore.gameStatus === 'playing'" class="game-info-panel">
               <div class="game-status">
@@ -220,8 +275,8 @@ wsService.on('host_disconnected', () => {
               <div class="move-history">
                 <h4>Historial de Movimientos</h4>
                 <div class="history-list">
-                  <div 
-                    v-for="(move, index) in gameStore.moveHistory.slice().reverse()" 
+                  <div
+                    v-for="(move, index) in gameStore.moveHistory.slice().reverse()"
                     :key="index"
                     class="history-item"
                   >
@@ -244,14 +299,14 @@ wsService.on('host_disconnected', () => {
 <style scoped>
 .app-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-header-bg);
   padding: 20px;
 }
 
 .app-header {
   text-align: center;
   margin-bottom: 30px;
-  color: white;
+  color: var(--color-text-on-primary);
 }
 
 .app-header h1 {
@@ -264,6 +319,7 @@ wsService.on('host_disconnected', () => {
   margin: 0 0 20px 0;
   font-size: 1.2rem;
   opacity: 0.9;
+  color: var(--color-text-on-primary);
 }
 
 .connection-status-bar {
@@ -287,6 +343,7 @@ wsService.on('host_disconnected', () => {
 .status-label {
   font-weight: bold;
   font-size: 0.9rem;
+  color: var(--color-text-on-primary);
 }
 
 .status-value {
@@ -295,12 +352,13 @@ wsService.on('host_disconnected', () => {
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.9rem;
+  color: var(--color-text-on-primary);
 }
 
 .back-to-lobby-button {
   padding: 8px 16px;
   background: rgba(255, 255, 255, 0.2);
-  color: white;
+  color: var(--color-text-on-primary);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 6px;
   cursor: pointer;
@@ -325,34 +383,70 @@ wsService.on('host_disconnected', () => {
 }
 
 .lobby-wrapper {
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 15px;
   padding: 0;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
 .connection-status-panel {
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 15px;
   padding: 20px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
+}
+
+.connection-status-info {
+  background: var(--color-surface);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.connection-status-info h4 {
+  margin: 0 0 15px 0;
+  color: var(--color-text);
+  font-size: 1.1rem;
+}
+
+.reconnect-button {
+  padding: 8px 16px;
+  background: var(--color-button-primary);
+  color: var(--color-button-primary-text);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.reconnect-button:hover {
+  background: var(--color-button-primary-hover);
+  transform: translateY(-2px);
+}
+
+.reconnect-button:disabled {
+  background: var(--color-button-secondary);
+  cursor: not-allowed;
+  transform: none;
 }
 
 .host-waiting-container,
 .guest-waiting-container {
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 15px;
   padding: 0;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
 .game-container {
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 15px;
   padding: 30px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
 }
 
 .game-area {
@@ -362,7 +456,7 @@ wsService.on('host_disconnected', () => {
 }
 
 .phaser-container {
-  background: #2c3e50;
+  background: var(--color-surface-variant);
   border-radius: 10px;
   overflow: hidden;
   position: relative;
@@ -387,12 +481,12 @@ wsService.on('host_disconnected', () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(44, 62, 80, 0.95);
+  background: var(--color-overlay-dark);
 }
 
 .placeholder-content {
   text-align: center;
-  color: white;
+  color: var(--color-text-on-primary);
   padding: 30px;
 }
 
@@ -408,7 +502,7 @@ wsService.on('host_disconnected', () => {
 
 .placeholder-board {
   display: inline-block;
-  border: 3px solid #34495e;
+  border: 3px solid var(--color-border-dark);
   border-radius: 5px;
   overflow: hidden;
 }
@@ -431,11 +525,11 @@ wsService.on('host_disconnected', () => {
 }
 
 .board-square.light {
-  background: #f0d9b5;
+  background: var(--color-game-white);
 }
 
 .board-square.dark {
-  background: #b58863;
+  background: var(--color-game-black);
 }
 
 .control-panel {
@@ -444,24 +538,18 @@ wsService.on('host_disconnected', () => {
   gap: 20px;
 }
 
-.connection-panel {
-  background: #f8f9fa;
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
 
 .game-info-panel {
-  background: #f8f9fa;
+  background: var(--color-surface);
   border-radius: 10px;
   padding: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .game-status h4,
 .move-history h4 {
   margin: 0 0 15px 0;
-  color: #333;
+  color: var(--color-text);
   font-size: 1.1rem;
 }
 
@@ -471,7 +559,7 @@ wsService.on('host_disconnected', () => {
   align-items: center;
   margin-bottom: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .status-item:last-child {
@@ -482,27 +570,27 @@ wsService.on('host_disconnected', () => {
 
 .status-label {
   font-weight: bold;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
 }
 
 .status-value {
   font-weight: bold;
-  color: #333;
+  color: var(--color-text);
 }
 
 .status-value.current-turn {
-  color: #28a745;
+  color: var(--color-success);
 }
 
 .your-turn {
   font-size: 0.8rem;
-  color: #28a745;
+  color: var(--color-success);
   margin-left: 5px;
 }
 
 .status-value.winner {
-  color: #dc3545;
+  color: var(--color-error);
 }
 
 .move-history {
@@ -512,17 +600,17 @@ wsService.on('host_disconnected', () => {
 .history-list {
   max-height: 300px;
   overflow-y: auto;
-  background: white;
+  background: var(--color-card-bg);
   border-radius: 5px;
   padding: 10px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--color-border);
 }
 
 .history-item {
   display: flex;
   align-items: center;
   padding: 8px 10px;
-  border-bottom: 1px solid #f1f1f1;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .history-item:last-child {
@@ -531,7 +619,7 @@ wsService.on('host_disconnected', () => {
 
 .move-number {
   font-weight: bold;
-  color: #666;
+  color: var(--color-text-secondary);
   min-width: 30px;
 }
 
@@ -539,11 +627,12 @@ wsService.on('host_disconnected', () => {
   flex: 1;
   font-family: monospace;
   font-size: 0.9rem;
+  color: var(--color-text);
 }
 
 .no-moves {
   text-align: center;
-  color: #666;
+  color: var(--color-text-secondary);
   font-style: italic;
   padding: 20px;
 }

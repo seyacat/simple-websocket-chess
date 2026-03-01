@@ -1,6 +1,21 @@
-<template>
+﻿<template>
   <div class="phaser-chess-game">
     <div ref="gameContainer" class="game-container"></div>
+    
+    <!-- Overlay de selecciÃ³n de asientos -->
+    <SeatSelectionOverlay
+      v-if="shouldShowSeatSelection"
+      @close="onSeatSelectionClose"
+    />
+    
+    <!-- Indicador de estado del jugador -->
+    <div v-if="gameInitialized && !shouldShowSeatSelection" class="player-status-indicator" :class="playerStatusClass">
+      <span class="status-icon">{{ playerStatusIcon }}</span>
+      <span class="status-text">{{ playerStatusText }}</span>
+      <button v-if="gameStore.isSeated && gameStore.gameStatus !== 'playing'" @click="showSeatSelection = true" class="change-seat-btn">
+        Cambiar asiento
+      </button>
+    </div>
     
     <div v-if="!gameInitialized" class="loading-overlay">
       <div class="loading-spinner"></div>
@@ -15,10 +30,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import Phaser from 'phaser'
 import { useGameStore } from '@/stores/gameStore'
 import { useConnectionStore } from '@/stores/connectionStore'
+import SeatSelectionOverlay from './SeatSelectionOverlay.vue'
 
 // Props
 const props = defineProps({
@@ -33,15 +49,61 @@ const gameContainer = ref(null)
 const game = ref(null)
 const gameInitialized = ref(false)
 const gameError = ref(null)
+const showSeatSelection = ref(true) // Mostrar overlay de asientos por defecto
 
 // Stores
 const gameStore = useGameStore()
 const connectionStore = useConnectionStore()
 
-// Configuración de Phaser
+// Computed properties
+const playerStatusText = computed(() => {
+  if (gameStore.isSeated) {
+    return `Jugador (${gameStore.mySeatColor === 'white' ? 'Blancas' : 'Negras'})`
+  } else if (gameStore.isSpectator) {
+    return 'Espectador'
+  } else {
+    return 'Sin asiento'
+  }
+})
+
+const playerStatusIcon = computed(() => {
+  if (gameStore.isSeated) {
+    return gameStore.mySeatColor === 'white' ? 'â™”' : 'â™š'
+  } else if (gameStore.isSpectator) {
+    return 'ðŸ‘ï¸'
+  } else {
+    return 'ðŸš«'
+  }
+})
+
+const playerStatusClass = computed(() => {
+  if (gameStore.isSeated) return 'player-seated'
+  if (gameStore.isSpectator) return 'player-spectator'
+  return 'player-none'
+})
+
+const shouldShowSeatSelection = computed(() => {
+  // Mostrar selecciÃ³n de asientos si:
+  // 1. El usuario lo solicita explÃ­citamente (showSeatSelection = true)
+  // 2. O no estÃ¡ sentado y el juego no estÃ¡ en progreso
+  // 3. O el juego estÃ¡ pausado
+  return showSeatSelection.value ||
+         (!gameStore.isSeated && gameStore.gameStatus !== 'playing') ||
+         gameStore.gameStatus === 'paused'
+})
+
+// MÃ©todos
+function onSeatSelectionClose() {
+  // Solo ocultar el overlay si el jugador estÃ¡ sentado
+  if (gameStore.isSeated) {
+    showSeatSelection.value = false
+  }
+}
+
+// ConfiguraciÃ³n de Phaser
 const phaserConfig = {
   type: Phaser.AUTO,
-  parent: null, // Se establecerá en mounted
+  parent: null, // Se establecerÃ¡ en mounted
   width: props.boardSize,
   height: props.boardSize,
   backgroundColor: '#f0f0f0',
@@ -63,7 +125,7 @@ let pieceSprites = []
 let selectedPiece = null
 let validMoveIndicators = []
 
-// Assets (placeholders - se reemplazarán con assets reales)
+// Assets (placeholders - se reemplazarÃ¡n con assets reales)
 const pieceAssets = {
   'white': {
     'king': 'white_king',
@@ -91,8 +153,8 @@ function preload() {
   scene.load.image('white_square', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==')
   scene.load.image('black_square', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
   
-  // Cargar piezas placeholder (usaremos gráficos generados)
-  // En una implementación real, cargaríamos sprites reales
+  // Cargar piezas placeholder (usaremos grÃ¡ficos generados)
+  // En una implementaciÃ³n real, cargarÃ­amos sprites reales
 }
 
 function create() {
@@ -119,14 +181,14 @@ function create() {
 }
 
 function update() {
-  // Actualización por frame
+  // ActualizaciÃ³n por frame
   // Podemos usar esto para animaciones suaves
 }
 
 function createBoard() {
   const squareSize = props.boardSize / 8
   
-  // Limpiar gráficos previos
+  // Limpiar grÃ¡ficos previos
   if (boardGraphics) {
     boardGraphics.destroy()
   }
@@ -141,12 +203,12 @@ function createBoard() {
       
       // Alternar colores
       const isLight = (row + col) % 2 === 0
-      const color = isLight ? 0xf0d9b5 : 0xb58863 // Colores de ajedrez estándar
+      const color = isLight ? 0xf0d9b5 : 0xb58863 // Colores de ajedrez estÃ¡ndar
       
       boardGraphics.fillStyle(color, 1)
       boardGraphics.fillRect(x, y, squareSize, squareSize)
       
-      // Añadir borde
+      // AÃ±adir borde
       boardGraphics.lineStyle(1, 0x000000, 0.2)
       boardGraphics.strokeRect(x, y, squareSize, squareSize)
       
@@ -192,14 +254,14 @@ function createPieces() {
 }
 
 function createPieceSprite(x, y, size, color, type) {
-  // Crear gráfico placeholder (círculo con letra)
+  // Crear grÃ¡fico placeholder (cÃ­rculo con letra)
   const graphics = scene.add.graphics()
   
   // Color de la pieza
   const fillColor = color === 'white' ? 0xffffff : 0x333333
   const borderColor = color === 'white' ? 0x666666 : 0x000000
   
-  // Dibujar círculo
+  // Dibujar cÃ­rculo
   graphics.fillStyle(fillColor, 1)
   graphics.fillCircle(0, 0, size * 0.4)
   
@@ -285,7 +347,7 @@ function setupInput() {
 }
 
 function handlePieceSelection(row, col) {
-  // Limpiar selección previa
+  // Limpiar selecciÃ³n previa
   clearSelection()
   
   // Seleccionar pieza
@@ -298,7 +360,7 @@ function handlePieceSelection(row, col) {
     sprite.setScale(1.1)
   }
   
-  // Mostrar movimientos válidos
+  // Mostrar movimientos vÃ¡lidos
   showValidMoves(row, col)
   
   // Notificar al store
@@ -308,7 +370,7 @@ function handlePieceSelection(row, col) {
 function handlePieceMove(toRow, toCol) {
   if (!selectedPiece) return
   
-  // Verificar si el movimiento es válido
+  // Verificar si el movimiento es vÃ¡lido
   const isValid = gameStore.validMoves.some(move => 
     move.row === toRow && move.col === toCol
   )
@@ -324,7 +386,7 @@ function handlePieceMove(toRow, toCol) {
   // Notificar al store
   gameStore.movePiece({ row: toRow, col: toCol })
   
-  // Limpiar selección
+  // Limpiar selecciÃ³n
   clearSelection()
 }
 
@@ -336,7 +398,7 @@ function movePieceVisual(fromRow, fromCol, toRow, toCol) {
   const targetX = toCol * squareSize + squareSize / 2
   const targetY = toRow * squareSize + squareSize / 2
   
-  // Animación de movimiento
+  // AnimaciÃ³n de movimiento
   scene.tweens.add({
     targets: sprite,
     x: targetX,
@@ -378,7 +440,7 @@ function showValidMoves(row, col) {
     const x = move.col * squareSize + squareSize / 2
     const y = move.row * squareSize + squareSize / 2
     
-    // Crear indicador de movimiento válido
+    // Crear indicador de movimiento vÃ¡lido
     const graphics = scene.add.graphics()
     graphics.fillStyle(0x00ff00, 0.3)
     graphics.fillCircle(x, y, squareSize * 0.2)
@@ -414,14 +476,14 @@ function getPieceAt(row, col) {
   )
 }
 
-// Métodos del componente Vue
+// MÃ©todos del componente Vue
 function initializeGame() {
   try {
     if (!gameContainer.value) {
       throw new Error('Contenedor del juego no encontrado')
     }
     
-    // Configurar parent en la configuración
+    // Configurar parent en la configuraciÃ³n
     phaserConfig.parent = gameContainer.value
     
     // Crear instancia de Phaser
@@ -454,7 +516,7 @@ watch(() => gameStore.board, (newBoard) => {
 }, { deep: true })
 
 watch(() => gameStore.selectedPiece, (newSelection) => {
-  // Sincronizar selección
+  // Sincronizar selecciÃ³n
   if (gameInitialized.value && scene) {
     if (newSelection) {
       handlePieceSelection(newSelection.row, newSelection.col)
@@ -490,7 +552,7 @@ onBeforeUnmount(() => {
   height: 100%;
   border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .loading-overlay,
@@ -504,7 +566,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-overlay-light);
   z-index: 10;
 }
 
@@ -524,7 +586,7 @@ onBeforeUnmount(() => {
 }
 
 .error-message {
-  color: #e74c3c;
+  color: var(--color-error);
   margin-bottom: 16px;
   text-align: center;
   max-width: 80%;
@@ -532,8 +594,8 @@ onBeforeUnmount(() => {
 
 .retry-button {
   padding: 8px 16px;
-  background: #3498db;
-  color: white;
+  background: var(--color-info);
+  color: var(--color-text-on-primary);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -541,6 +603,59 @@ onBeforeUnmount(() => {
 }
 
 .retry-button:hover {
-  background: #2980b9;
+  background: var(--color-info-dark);
+}
+
+/* Player status indicator */
+.player-status-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: var(--color-overlay);
+  color: var(--color-text-on-primary);
+  padding: 8px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  z-index: 5;
+  backdrop-filter: blur(5px);
+}
+
+.player-status-indicator.player-seated {
+  border-left: 4px solid #4caf50;
+}
+
+.player-status-indicator.player-spectator {
+  border-left: 4px solid #2196f3;
+}
+
+.player-status-indicator.player-none {
+  border-left: 4px solid #ff9800;
+}
+
+.status-icon {
+  font-size: 16px;
+}
+
+.status-text {
+  font-weight: bold;
+}
+
+.change-seat-btn {
+  margin-left: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--color-text-on-primary);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.change-seat-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 </style>
