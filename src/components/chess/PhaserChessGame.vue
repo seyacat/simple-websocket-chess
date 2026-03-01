@@ -249,16 +249,35 @@ function initializeGame() {
 }
 
 function preload() {
-  // Precargar assets (mantener lógica existente)
-  this.load.image('white-square', 'assets/white-square.png')
-  this.load.image('black-square', 'assets/black-square.png')
-  // ... más assets
+  // No necesitamos cargar imágenes externas
+  // Las texturas se crearán en create()
 }
 
 function create() {
-  // Crear tablero (mantener lógica existente)
+  // Crear texturas para cuadros del tablero
+  createSquareTextures.call(this)
+  
+  // Crear tablero
   createBoard.call(this)
   updateBoardInPhaser.call(this, board.value)
+}
+
+function createSquareTextures() {
+  const squareSize = 64 // Tamaño base para la textura
+  
+  // Crear textura para cuadro blanco
+  const whiteGraphics = this.add.graphics()
+  whiteGraphics.fillStyle(0xf0d9b5, 1) // Color beige claro
+  whiteGraphics.fillRect(0, 0, squareSize, squareSize)
+  whiteGraphics.generateTexture('white-square', squareSize, squareSize)
+  whiteGraphics.destroy()
+  
+  // Crear textura para cuadro negro
+  const blackGraphics = this.add.graphics()
+  blackGraphics.fillStyle(0xb58863, 1) // Color marrón
+  blackGraphics.fillRect(0, 0, squareSize, squareSize)
+  blackGraphics.generateTexture('black-square', squareSize, squareSize)
+  blackGraphics.destroy()
 }
 
 function update() {
@@ -296,8 +315,53 @@ function updateBoardInPhaser(newBoard) {
   const scene = game.value.scene.getScene('default')
   if (!scene) return
   
-  // Implementación para actualizar piezas en el tablero Phaser
-  // (mantener lógica existente)
+  // Limpiar piezas existentes
+  if (scene.pieceGroup) {
+    scene.pieceGroup.clear(true, true)
+  } else {
+    scene.pieceGroup = scene.add.group()
+  }
+  
+  // Crear piezas en el tablero
+  const squareSize = props.boardSize / 8
+  
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = newBoard[row][col]
+      if (!piece) continue
+      
+      const x = col * squareSize + squareSize / 2
+      const y = row * squareSize + squareSize / 2
+      
+      // Crear texto para representar la pieza
+      const pieceText = scene.add.text(x, y, getPieceSymbol(piece), {
+        fontSize: Math.floor(squareSize * 0.6) + 'px',
+        fontFamily: 'Arial, sans-serif',
+        color: getPieceColor(piece) === 'white' ? '#FFFFFF' : '#000000',
+        stroke: getPieceColor(piece) === 'white' ? '#000000' : '#FFFFFF',
+        strokeThickness: 2,
+        align: 'center'
+      })
+      .setOrigin(0.5)
+      
+      scene.pieceGroup.add(pieceText)
+    }
+  }
+}
+
+// Función auxiliar para obtener símbolo de pieza
+function getPieceSymbol(piece) {
+  const pieceMap = {
+    'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+    'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+  }
+  return pieceMap[piece] || piece
+}
+
+// Función auxiliar para obtener color de pieza
+function getPieceColor(piece) {
+  if (!piece) return null
+  return piece === piece.toUpperCase() ? 'white' : 'black'
 }
 
 function updateGameStatusInPhaser(newStatus) {

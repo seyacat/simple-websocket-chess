@@ -134,13 +134,44 @@ wsService.on('broadcast_message', (data) => {
 wsService.on('host_disconnected', () => {
   if (connectionStore.mode === 'guest') {
     // Volver al lobby después de un breve delay
-    setTimeout(() => {
+    setTimeout(async () => {
+      try {
+        // Cambiar modo a null para notificar al servidor
+        await wsService.setMode(null)
+      } catch (error) {
+        console.error('Error cambiando modo después de desconexión del host:', error)
+      }
+      // Actualizar estado local
       connectionStore.setMode(null)
       connectionStore.setSubscribedHost(null)
       determineCurrentView()
     }, 3000)
   }
 })
+
+// Método para volver al lobby
+const returnToLobby = async () => {
+  try {
+    // Si estamos suscritos como guest, desuscribirse primero
+    if (connectionStore.isGuest && connectionStore.subscribedHost) {
+      await wsService.unsubscribe()
+    }
+    
+    // Cambiar modo a null para notificar al servidor
+    await wsService.setMode(null)
+    
+    // Actualizar estado local
+    connectionStore.setMode(null)
+    connectionStore.setSubscribedHost(null)
+    currentView.value = 'lobby'
+  } catch (error) {
+    console.error('Error al volver al lobby:', error)
+    // Fallback: actualizar estado local aunque falle el servidor
+    connectionStore.setMode(null)
+    connectionStore.setSubscribedHost(null)
+    currentView.value = 'lobby'
+  }
+}
 
 // Conectar automáticamente al montar el componente
 onMounted(() => {
@@ -162,7 +193,7 @@ onMounted(() => {
         
         <div v-if="currentView !== 'lobby'" class="status-item">
           <button
-            @click="connectionStore.setMode(null); connectionStore.setSubscribedHost(null); currentView = 'lobby'"
+            @click="returnToLobby"
             class="back-to-lobby-button"
           >
             Volver al Lobby
