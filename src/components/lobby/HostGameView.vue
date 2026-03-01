@@ -145,12 +145,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useGameStore } from '@/stores/gameStore'
 import { useHostGameStore } from '@/stores/hostGameStore'
-import { getWebSocketService } from '@/services/WebSocketService'
 
 const connectionStore = useConnectionStore()
 const gameStore = useGameStore()
 const hostGameStore = useHostGameStore()
-const wsService = getWebSocketService()
 
 // Estado local
 const isStarting = ref(false)
@@ -217,7 +215,13 @@ const changeVisibility = async () => {
   
   try {
     const newVisibility = connectionStore.visibility === 'public' ? 'private' : 'public'
-    await wsService.setMode('host', newVisibility)
+    // En el proxy, actualizar el modo local
+    connectionStore.setMode('host', newVisibility)
+    
+    // Si cambia a público, publicar en canal
+    if (newVisibility === 'public') {
+      await connectionStore.publishToChessHosts()
+    }
     
     showNotification('success', `Juego ahora es ${newVisibility === 'public' ? 'público' : 'privado'}`)
   } catch (error) {
@@ -241,7 +245,7 @@ const cancelGame = async () => {
     await new Promise(resolve => setTimeout(resolve, 500))
     
     // Cambiar a modo null para volver al lobby
-    await wsService.setMode(null)
+    connectionStore.setMode(null)
     
     // El cambio a la vista de lobby se manejará en App.vue
   } catch (error) {
@@ -267,18 +271,24 @@ const clearNotification = () => {
   notification.value = null
 }
 
-// Escuchar eventos de nuevos jugadores
-onMounted(() => {
-  // Configurar listener para nuevos subscribers
-  wsService.on('new_subscriber', (data) => {
-    showNotification('info', `Nuevo jugador conectado: ${data.guest}`)
-  })
+// Observar cambios en los subscribers para mostrar notificaciones
+watch(() => connectionStore.subscribers, (newSubscribers, oldSubscribers) => {
+  // Detectar nuevos subscribers
+  if (oldSubscribers && newSubscribers.length > oldSubscribers.length) {
+    const newSubscriber = newSubscribers.find(sub => !oldSubscribers.includes(sub))
+    if (newSubscriber) {
+      showNotification('info', `Nuevo jugador conectado: ${newSubscriber}`)
+    }
+  }
   
-  // Configurar listener para subscribers desconectados
-  wsService.on('subscriber_disconnected', (data) => {
-    showNotification('warning', `Jugador desconectado: ${data.guest}`)
-  })
-})
+  // Detectar subscribers desconectados
+  if (oldSubscribers && newSubscribers.length < oldSubscribers.length) {
+    const removedSubscriber = oldSubscribers.find(sub => !newSubscribers.includes(sub))
+    if (removedSubscriber) {
+      showNotification('warning', `Jugador desconectado: ${removedSubscriber}`)
+    }
+  }
+}, { immediate: false })
 </script>
 
 <style scoped>

@@ -139,12 +139,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useGameStore } from '@/stores/gameStore'
-import { getWebSocketService } from '@/services/WebSocketService'
 
 // Stores
 const connectionStore = useConnectionStore()
 const gameStore = useGameStore()
-const wsService = getWebSocketService()
 
 // Estado local
 const opponentTokenInput = ref('')
@@ -195,7 +193,7 @@ function isValidToken(token) {
 async function connect() {
   isConnecting.value = true
   try {
-    await wsService.connect()
+    await connectionStore.connect()
   } catch (error) {
     console.error('Error conectando:', error)
   } finally {
@@ -204,7 +202,7 @@ async function connect() {
 }
 
 function disconnect() {
-  wsService.disconnect()
+  connectionStore.disconnect()
   opponentTokenInput.value = ''
 }
 
@@ -284,14 +282,8 @@ onMounted(() => {
     opponentTokenInput.value = connectionStore.opponentToken
   }
   
-  // Configurar listeners para eventos WebSocket
-  wsService.on('connected', () => {
-    console.log('WebSocket conectado desde ConnectionPanel')
-  })
-  
-  wsService.on('error', (error) => {
-    console.error('Error WebSocket:', error)
-  })
+  // Los eventos de conexión son manejados por connectionStore
+  // No se necesitan listeners adicionales aquí
 })
 </script>
 

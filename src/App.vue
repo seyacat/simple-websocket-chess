@@ -5,13 +5,11 @@ import PhaserChessGame from './components/chess/PhaserChessGame.vue'
 import { useGameStore } from './stores/gameStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useHostGameStore } from '@/stores/hostGameStore'
-import { getWebSocketService } from '@/services/WebSocketService'
 
 // Stores
 const gameStore = useGameStore()
 const connectionStore = useConnectionStore()
 const hostGameStore = useHostGameStore()
-const wsService = getWebSocketService()
 
 // Estado local
 const showGameControls = ref(true)
@@ -89,7 +87,7 @@ const determineCurrentView = () => {
   currentView.value = 'game'
 }
 
-// Conectar automáticamente al WebSocket
+// Conectar automáticamente al WebSocket proxy
 const autoConnect = async () => {
   if (connectionStore.isConnected || isConnecting.value) {
     return
@@ -97,12 +95,12 @@ const autoConnect = async () => {
   
   isConnecting.value = true
   try {
-    console.log('Conectando automáticamente al servidor WebSocket...')
-    await wsService.connect()
-    console.log('Conexión WebSocket establecida automáticamente')
+    console.log('Conectando automáticamente al servidor WebSocket proxy...')
+    await connectionStore.connect()
+    console.log('Conexión WebSocket proxy establecida automáticamente')
   } catch (error) {
     console.error('Error al conectar automáticamente:', error)
-    // El servicio de WebSocket manejará la reconexión automática
+    // El connectionStore manejará la reconexión automática
   } finally {
     isConnecting.value = false
   }
@@ -116,40 +114,9 @@ watch(() => gameStore.gameStatus, determineCurrentView)
 // Inicializar vista
 determineCurrentView()
 
-// Configurar listeners para eventos de WebSocket
-wsService.on('mode_set', () => {
-  determineCurrentView()
-})
-
-wsService.on('subscribed', () => {
-  determineCurrentView()
-})
-
-wsService.on('broadcast_message', (data) => {
-  // Verificar si es un mensaje de inicio de juego
-  if (data.message && data.message.startsWith('GAME_START|')) {
-    determineCurrentView()
-  }
-})
-
-// Handler para desconexión del host (para guests)
-wsService.on('host_disconnected', () => {
-  if (connectionStore.mode === 'guest') {
-    // Volver al lobby después de un breve delay
-    setTimeout(async () => {
-      try {
-        // Cambiar modo a null para notificar al servidor
-        await wsService.setMode(null)
-      } catch (error) {
-        console.error('Error cambiando modo después de desconexión del host:', error)
-      }
-      // Actualizar estado local
-      connectionStore.setMode(null)
-      connectionStore.setSubscribedHost(null)
-      determineCurrentView()
-    }, 3000)
-  }
-})
+// Configurar listeners para eventos del proxy (a través del connectionStore)
+// Los eventos se manejan internamente en el connectionStore
+// Para cambios de vista, usamos watchers en el estado del store
 
 // Método para volver al lobby
 const returnToLobby = async () => {
@@ -165,11 +132,11 @@ const returnToLobby = async () => {
     
     // Si estamos suscritos como guest, desuscribirse primero
     if (connectionStore.isGuest && connectionStore.subscribedHost) {
-      await wsService.unsubscribe()
+      await connectionStore.unsubscribe()
     }
     
-    // Cambiar modo a null para notificar al servidor
-    await wsService.setMode(null)
+    // Cambiar modo a null (no hay setMode en proxy, solo actualizar estado local)
+    // En el proxy, el modo se maneja a través de publicación en canales
     
     // Actualizar estado local
     connectionStore.setMode(null)

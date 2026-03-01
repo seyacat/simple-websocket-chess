@@ -2,7 +2,7 @@
   <div class="lobby-view">
     <div class="lobby-header">
       <h2>Lobby de Ajedrez</h2>
-      <p class="subtitle">Conectado como: <strong>{{ connectionStore.shortToken }}</strong></p>
+      <p class="subtitle">Conectado como: <strong>{{ connectionStore.token || 'Desconectado' }}</strong></p>
     </div>
 
     <div class="lobby-content">
@@ -60,29 +60,25 @@
         </div>
 
         <div v-else class="hosts-list">
-          <div 
-            v-for="host in publicHosts" 
-            :key="host.shortToken"
+          <div
+            v-for="hostToken in publicHosts"
+            :key="hostToken"
             class="host-card"
           >
             <div class="host-info">
               <div class="host-token">
                 <span class="token-label">Host:</span>
-                <code class="token-value">{{ host.shortToken }}</code>
+                <code class="token-value">{{ hostToken }}</code>
               </div>
               <div class="host-stats">
-                <span class="stat">
-                  <span class="stat-icon">👥</span>
-                  {{ host.subscribersCount }} jugador{{ host.subscribersCount !== 1 ? 'es' : '' }}
-                </span>
                 <span class="stat">
                   <span class="stat-icon">🌐</span>
                   Público
                 </span>
               </div>
             </div>
-            <button 
-              @click="joinGame(host.shortToken)"
+            <button
+              @click="joinGame(hostToken)"
               class="join-button"
               :disabled="isJoining"
             >
@@ -134,10 +130,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useConnectionStore } from '@/stores/connectionStore'
-import { getWebSocketService } from '@/services/WebSocketService'
 
 const connectionStore = useConnectionStore()
-const wsService = getWebSocketService()
 
 // Estado local
 const isCreating = ref(false)
@@ -180,9 +174,10 @@ const createPublicGame = async () => {
   errorMessage.value = ''
   
   try {
-    await wsService.setMode('host', 'public')
+    // En el proxy, establecer modo host y publicar en canal 'chess_hosts'
+    connectionStore.setMode('host', 'public')
+    // La publicación en canal se maneja automáticamente en connectionStore
     // La transición a la vista de host-waiting se manejará en App.vue
-    // basado en el cambio de estado en connectionStore
   } catch (error) {
     errorMessage.value = `Error al crear juego público: ${error.message}`
     console.error('Error creating public game:', error)
@@ -198,7 +193,8 @@ const createPrivateGame = async () => {
   errorMessage.value = ''
   
   try {
-    await wsService.setMode('host', 'private')
+    // En el proxy, establecer modo host (privado no se publica en canal)
+    connectionStore.setMode('host', 'private')
     // La transición a la vista de host-waiting se manejará en App.vue
   } catch (error) {
     errorMessage.value = `Error al crear juego privado: ${error.message}`
@@ -215,18 +211,22 @@ const joinGame = async (hostToken) => {
   errorMessage.value = ''
   
   try {
-    // Primero establecer modo guest
-    await wsService.setMode('guest')
+    // En el proxy, establecer modo guest
+    connectionStore.setMode('guest')
     
-    // Luego suscribirse al host
-    await wsService.subscribeToHost(hostToken)
+    // Luego suscribirse al host (handshake)
+    const success = await connectionStore.subscribeToHost(hostToken)
+    
+    if (!success) {
+      throw new Error('No se pudo conectar con el host')
+    }
     
     // La transición a la vista de guest-waiting se manejará en App.vue
   } catch (error) {
     errorMessage.value = `Error al unirse al juego: ${error.message}`
     console.error('Error joining game:', error)
     // Revertir modo si falla
-    await wsService.setMode(null)
+    connectionStore.setMode(null)
   } finally {
     isJoining.value = false
   }
@@ -249,7 +249,7 @@ const refreshPublicHosts = async () => {
   errorMessage.value = ''
   
   try {
-    await wsService.listPublicHosts()
+    await connectionStore.listPublicHosts()
   } catch (error) {
     errorMessage.value = `Error al actualizar lista: ${error.message}`
     console.error('Error refreshing public hosts:', error)

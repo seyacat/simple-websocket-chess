@@ -14,7 +14,7 @@
             <div class="info-item">
               <span class="info-label">Tu Token:</span>
               <div class="token-display">
-                <code class="token-value">{{ connectionStore.shortToken }}</code>
+                <code class="token-value">{{ connectionStore.token }}</code>
               </div>
             </div>
             
@@ -92,12 +92,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useConnectionStore } from '@/stores/connectionStore'
-import { getWebSocketService } from '@/services/WebSocketService'
 
 const connectionStore = useConnectionStore()
-const wsService = getWebSocketService()
 
 // Estado local
 const isDisconnecting = ref(false)
@@ -121,10 +119,10 @@ const disconnect = async () => {
   
   try {
     // Desuscribirse primero
-    await wsService.unsubscribe()
+    await connectionStore.unsubscribe()
     
     // Cambiar a modo null para volver al lobby
-    await wsService.setMode(null)
+    await connectionStore.setMode(null)
     
     // El cambio a la vista de lobby se manejará en App.vue
   } catch (error) {
@@ -149,9 +147,9 @@ const clearNotification = () => {
   notification.value = null
 }
 
-const handleHostDisconnected = (data) => {
+const handleHostDisconnected = () => {
   hostConnected.value = false
-  showNotification('error', `El host ${data.host} se ha desconectado. Serás redirigido al lobby.`)
+  showNotification('error', `El host se ha desconectado. Serás redirigido al lobby.`)
   
   // Redirigir al lobby después de 3 segundos
   setTimeout(() => {
@@ -167,24 +165,22 @@ const handleGameStart = (data) => {
 
 // Lifecycle hooks
 onMounted(() => {
-  // Configurar listeners para eventos del host
-  wsService.on('host_disconnected', handleHostDisconnected)
-  wsService.on('broadcast_message', (data) => {
-    // Verificar si es un mensaje de inicio de juego
-    if (data.message && data.message.startsWith('GAME_START|')) {
-      handleGameStart(data)
+  // Observar cambios en el host suscrito para detectar desconexiones
+  watch(() => connectionStore.subscribedHost, (newHost, oldHost) => {
+    if (oldHost && !newHost) {
+      // Host desconectado
+      handleHostDisconnected()
     }
   })
   
-  // Configurar listener para mensajes de error
-  wsService.on('error', (data) => {
-    showNotification('error', `Error: ${data.error || 'Error desconocido'}`)
-  })
+  // Observar mensajes recibidos para detectar inicio de juego
+  // Los mensajes de juego serán manejados por los stores de juego
+  // Este componente solo necesita detectar cuando el juego comienza
+  // lo cual se manejará en App.vue basado en el estado del gameStore
 })
 
 onUnmounted(() => {
-  // Limpiar listeners
-  wsService.off('host_disconnected', handleHostDisconnected)
+  // No se necesitan limpiar listeners ya que watch se limpia automáticamente
 })
 </script>
 

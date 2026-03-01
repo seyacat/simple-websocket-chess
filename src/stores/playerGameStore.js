@@ -4,7 +4,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useConnectionStore } from './connectionStore'
-import { getWebSocketService } from '@/services/WebSocketService'
 import {
   COLORS,
   getValidMoves,
@@ -46,7 +45,6 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   
   // Stores y servicios
   const connectionStore = useConnectionStore()
-  const wsService = getWebSocketService()
   
   // Inicializar el tablero
   function initializeBoard() {
@@ -216,7 +214,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     
     const message = formatWebSocketMessage(MESSAGE_TYPES.MOVE, moveData)
     
-    wsService.sendMessage(
+    connectionStore.sendMessage(
       connectionStore.subscribedHost,
       message
     ).catch(error => {
@@ -300,7 +298,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     
     const message = formatWebSocketMessage(MESSAGE_TYPES.SEAT_REQUEST, seatRequestData)
     
-    wsService.sendMessage(
+    connectionStore.sendMessage(
       connectionStore.subscribedHost,
       message
     ).catch(error => {
@@ -327,7 +325,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     
     const message = formatWebSocketMessage(MESSAGE_TYPES.LEAVE_SEAT, leaveSeatData)
     
-    wsService.sendMessage(
+    connectionStore.sendMessage(
       connectionStore.subscribedHost,
       message
     ).catch(error => {
@@ -484,7 +482,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     
     const message = formatWebSocketMessage(MESSAGE_TYPES.SURRENDER, surrenderData)
     
-    wsService.sendMessage(
+    connectionStore.sendMessage(
       connectionStore.subscribedHost,
       message
     ).catch(error => {
@@ -494,23 +492,41 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   
   // Inicializar WebSocket listeners
   function initWebSocketListeners() {
-    // Handler para mensajes broadcast del host
-    wsService.on('broadcast_message', (data) => {
-      const parsed = parseWebSocketMessage(data.message)
-      applyUpdateFromHost(parsed.type, parsed.data)
+    const proxyClient = connectionStore.wsProxyClient()
+    
+    if (!proxyClient) {
+      console.warn('Proxy client no disponible para configurar listeners')
+      return
+    }
+    
+    // Handler para mensajes recibidos del host
+    proxyClient.on('message', (fromToken, message, timestamp, parsedMessage) => {
+      // Solo procesar mensajes del host al que estamos suscritos
+      if (fromToken === connectionStore.subscribedHost) {
+        try {
+          // Parsear el mensaje (puede venir ya parseado como parsedMessage)
+          let parsed
+          if (parsedMessage) {
+            parsed = parsedMessage
+          } else {
+            parsed = parseWebSocketMessage(message)
+          }
+          
+          if (parsed && parsed.type) {
+            applyUpdateFromHost(parsed.type, parsed.data)
+          }
+        } catch (error) {
+          console.error('Error procesando mensaje del host:', error)
+        }
+      }
     })
     
-    // Handler para desconexión del host
-    wsService.on('host_disconnected', (data) => {
-      // Cuando el host se desconecta o cierra el juego, resetear completamente el estado local
-      console.log('Host desconectado, reseteando estado local del juego. Razón:', data?.reason || 'desconocida')
-      initializeBoard()
-      
-      // También podríamos mostrar un mensaje al usuario basado en la razón
-      if (data?.reason === 'closed_game') {
-        console.log('El host cerró el juego intencionalmente')
-      } else if (data?.reason === 'changed_mode') {
-        console.log('El host cambió de modo')
+    // Handler para desconexión del host (evento unpaired)
+    proxyClient.on('unpaired', (unpairedToken, timestamp) => {
+      // Si el host al que estamos suscritos se desconecta
+      if (unpairedToken === connectionStore.subscribedHost) {
+        console.log('Host desconectado, reseteando estado local del juego.')
+        initializeBoard()
       }
     })
   }

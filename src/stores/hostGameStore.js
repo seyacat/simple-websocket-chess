@@ -4,7 +4,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useConnectionStore } from './connectionStore'
-import { getWebSocketService } from '@/services/WebSocketService'
 import {
   COLORS,
   getValidMoves,
@@ -35,7 +34,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   // Stores y servicios
   const connectionStore = useConnectionStore()
-  const wsService = getWebSocketService()
   
   // Getters para acceso conveniente al estado
   const board = computed(() => gameState.value.board)
@@ -473,7 +471,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     const message = formatWebSocketMessage(type, data)
     
     // Usar comando de broadcast explícito
-    wsService.broadcast(message).catch(error => {
+    connectionStore.broadcastToSubscribers(message).catch(error => {
       console.error('Error enviando broadcast:', error)
     })
   }
@@ -663,37 +661,41 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   // Inicializar WebSocket listeners para mensajes directos de guests
   function initWebSocketListeners() {
+    const proxyClient = connectionStore.wsProxyClient()
+    
+    if (!proxyClient) {
+      console.warn('Proxy client no disponible para configurar listeners')
+      return
+    }
+    
     // Handler para mensajes directos de guests
-    wsService.on('message', (data) => {
+    proxyClient.on('message', (fromToken, message, timestamp, parsedMessage) => {
       // Solo procesar si somos host
       if (!connectionStore.isHost) return
       
-      // El mensaje viene con 'from' y 'message'
-      const { from, message } = data
-      handleGuestMessage(from, message)
+      // El mensaje viene con 'fromToken' y 'message'
+      handleGuestMessage(fromToken, message)
     })
     
-    // Handler para nuevos subscribers (guests que se conectan)
-    wsService.on('new_subscriber', (data) => {
+    // Handler para nuevos guests conectados (evento paired)
+    proxyClient.on('paired', (pairedToken) => {
       if (!connectionStore.isHost) return
       
-      const { guest } = data
-      // Podríamos enviar el estado actual al nuevo subscriber
+      // Podríamos enviar el estado actual al nuevo guest
       // Por ahora solo lo agregamos como espectador
-      addSpectator(guest, `Guest`)
+      addSpectator(pairedToken, `Guest`)
     })
     
-    // Handler para subscribers desconectados
-    wsService.on('subscriber_disconnected', (data) => {
+    // Handler para guests desconectados (evento unpaired)
+    proxyClient.on('unpaired', (unpairedToken, timestamp) => {
       if (!connectionStore.isHost) return
       
-      const { guest } = data
       // Verificar si el guest estaba en un asiento
-      const seatColor = getSeatColorByToken(guest)
+      const seatColor = getSeatColorByToken(unpairedToken)
       if (seatColor) {
-        vacateSeat(seatColor, guest)
+        vacateSeat(seatColor, unpairedToken)
       } else {
-        removeSpectator(guest)
+        removeSpectator(unpairedToken)
       }
     })
   }
