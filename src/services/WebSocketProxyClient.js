@@ -32,7 +32,7 @@ export class WebSocketProxyClient {
     // Connection state
     this.ws = null;
     this.token = null;
-    this.isConnected = false;
+    this._isConnected = false;
     this.reconnectAttempts = 0;
     this.reconnectTimer = null;
 
@@ -40,6 +40,10 @@ export class WebSocketProxyClient {
     this.activeConnections = new Map(); // token -> {metadata}
     this.channelSubscriptions = new Map(); // channel -> {tokens, lastUpdate}
     this.waitingHandshakes = new Map(); // messageId -> {targetToken, localId, timestamp, timeout}
+    
+    // Local ID to token mapping for transparent communication
+    this.localIdToTokenMap = new Map(); // localId -> currentToken
+    this.tokenToLocalIdMap = new Map(); // token -> localId (reverse mapping)
     
     // Event system
     this.eventHandlers = new Map();
@@ -59,6 +63,30 @@ export class WebSocketProxyClient {
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substring(2, 10);
     return `local_${timestamp}_${random}`;
+  }
+
+  /**
+   * Update local ID to token mapping
+   * @private
+   * @param {string} localId Local identifier
+   * @param {string} token Server token
+   */
+  _updateLocalIdMapping(localId, token) {
+    const previousToken = this.localIdToTokenMap.get(localId);
+    
+    // Update forward mapping
+    this.localIdToTokenMap.set(localId, token);
+    
+    // Update reverse mapping
+    this.tokenToLocalIdMap.set(token, localId);
+    
+    // Clean up previous token mapping if it changed
+    if (previousToken && previousToken !== token) {
+      this.tokenToLocalIdMap.delete(previousToken);
+      this.emit('token_updated', { localId, oldToken: previousToken, newToken: token });
+    } else if (!previousToken) {
+      this.emit('local_id_mapped', { localId, token });
+    }
   }
 
   /**
@@ -110,7 +138,7 @@ export class WebSocketProxyClient {
    */
   handleOpen(event) {
     console.log('WebSocket connected');
-    this.isConnected = true;
+    this._isConnected = true;
     this.reconnectAttempts = 0;
 
     this.emit('connect', this.config.localIdentifier);
@@ -229,6 +257,9 @@ export class WebSocketProxyClient {
         });
         this.emit('paired', from);
       }
+      
+      // Update local ID to token mapping for transparent communication
+      this._updateLocalIdMapping(localId, from);
       
       this.emit('handshake_responded', { targetToken: from, messageId, localId });
     } catch (error) {
@@ -363,6 +394,9 @@ export class WebSocketProxyClient {
             this.emit('paired', from);
           }
           
+          // Update local ID to token mapping for transparent communication
+          this._updateLocalIdMapping(localId, from);
+          
           this.emit('handshake_completed', {
             targetToken: from,
             messageId: responseId,
@@ -428,7 +462,7 @@ export class WebSocketProxyClient {
 
   /**
    * Handle disconnected notification
-   * @param {Object} data 
+   * @param {Object} data
    */
   handleDisconnected(data) {
     const { token, timestamp } = data;
@@ -437,6 +471,14 @@ export class WebSocketProxyClient {
     if (this.activeConnections.has(token)) {
       this.activeConnections.delete(token);
       this.emit('unpaired', token, timestamp);
+    }
+    
+    // Clean up local ID to token mappings
+    const localId = this.tokenToLocalIdMap.get(token);
+    if (localId) {
+      this.localIdToTokenMap.delete(localId);
+      this.tokenToLocalIdMap.delete(token);
+      this.emit('local_id_unmapped', { localId, token, timestamp });
     }
     
     console.log(`Disconnected from ${token} at ${timestamp}`);
@@ -498,7 +540,7 @@ export class WebSocketProxyClient {
    */
   handleClose(event) {
     console.log(`WebSocket disconnected: ${event.code} ${event.reason || 'No reason'}`);
-    this.isConnected = false;
+    this._isConnected = false;
     this.token = null;
     
     // Clear waiting handshakes on disconnect
@@ -620,6 +662,43 @@ export class WebSocketProxyClient {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Send a message to one or more targets using their local IDs
+   * @param {string|string[]} localIds Target's local identifier(s)
+   * @param {string} message Message content
+   * @returns {Promise<void>}
+   */
+  sendTo(localIds, message) {
+    // Convert to array if single ID
+    const localIdArray = Array.isArray(localIds) ? localIds : [localIds];
+    
+    if (localIdArray.length === 0) {
+      return Promise.reject(new Error('No target local IDs specified'));
+    }
+    
+    // Map local IDs to tokens
+    const tokens = [];
+    const missingLocalIds = [];
+    
+    for (const localId of localIdArray) {
+      const token = this.localIdToTokenMap.get(localId);
+      if (token) {
+        tokens.push(token);
+      } else {
+        missingLocalIds.push(localId);
+      }
+    }
+    
+    if (missingLocalIds.length > 0) {
+      return Promise.reject(new Error(
+        `No active connection with local ID(s): ${missingLocalIds.join(', ')}. Handshake may not be completed.`
+      ));
+    }
+    
+    // Use the existing send method with the mapped tokens
+    return this.send(tokens, message);
   }
 
   /**
@@ -766,7 +845,7 @@ export class WebSocketProxyClient {
     }
     
     // Reset state
-    this.isConnected = false;
+    this._isConnected = false;
     this.token = null;
     this.reconnectAttempts = 0;
     this.activeConnections.clear();
@@ -784,11 +863,44 @@ export class WebSocketProxyClient {
   }
 
   /**
+   * Check if connected to the WebSocket server
+   * @returns {boolean} True if connected
+   */
+  isConnected() {
+    return this._isConnected;
+  }
+
+  /**
    * Get local identifier
    * @returns {string} Local identifier
    */
   getLocalIdentifier() {
     return this.config.localIdentifier;
+  }
+
+  /**
+   * Get local identifier (alias for getLocalIdentifier)
+   * @returns {string} Local identifier
+   */
+  getLocalId() {
+    return this.config.localIdentifier;
+  }
+
+  /**
+   * Get list of local IDs that have active token mappings
+   * @returns {string[]} Array of local IDs
+   */
+  getMappedLocalIds() {
+    return Array.from(this.localIdToTokenMap.keys());
+  }
+
+  /**
+   * Get token for a specific local ID
+   * @param {string} localId Local identifier
+   * @returns {string|null} Token or null if not mapped
+   */
+  getTokenForLocalId(localId) {
+    return this.localIdToTokenMap.get(localId) || null;
   }
 
   /**
