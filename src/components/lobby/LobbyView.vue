@@ -1,120 +1,70 @@
-﻿<template>
+<template>
   <div class="lobby-view">
     <div class="lobby-header">
       <h2>Lobby de Ajedrez</h2>
-      <p class="subtitle">Conectado como: <strong>{{ connectionStore.token || 'Desconectado' }}</strong></p>
     </div>
 
     <div class="lobby-content">
-      <!-- Sección de creación de juego -->
-      <div class="game-creation-section">
-        <h3>Crear Nuevo Juego</h3>
-        <div class="creation-options">
-          <button 
-            @click="createPublicGame" 
-            class="create-button public-game"
-            :disabled="isCreating"
-          >
-            <span class="button-icon">🌐</span>
-            <span class="button-text">
-              <strong>Juego Público</strong>
-              <small>Visible en la lista para que otros se unan</small>
-            </span>
-          </button>
+      <!-- Acciones: Crear / Unirse -->
+      <div class="lobby-actions-column">
+        <!-- Sección de creación de juego -->
+        <div class="game-creation-section">
+          <h3>Crear Nuevo Juego</h3>
           
-          <button 
-            @click="createPrivateGame" 
-            class="create-button private-game"
-            :disabled="isCreating"
-          >
-            <span class="button-icon">🔐</span>
-            <span class="button-text">
-              <strong>Juego Privado</strong>
-              <small>Solo con tu token compartido</small>
-            </span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Sección de lista de hosts públicos -->
-      <div class="public-hosts-section">
-        <div class="section-header">
-          <h3>Juegos Públicos Disponibles</h3>
-          <div class="refresh-controls">
-            <span class="last-update">
-              {{ lastUpdateText }}
-            </span>
-            <button 
-              @click="refreshPublicHosts" 
-              class="refresh-button"
-              :disabled="isRefreshing"
-            >
-              {{ isRefreshing ? 'Actualizando...' : 'Actualizar' }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="publicHosts.length === 0" class="empty-state">
-          <p>No hay juegos públicos disponibles.</p>
-          <p>Crea uno o pide a un amigo que cree un juego público.</p>
-        </div>
-
-        <div v-else class="hosts-list">
-          <div
-            v-for="hostToken in publicHosts"
-            :key="hostToken"
-            class="host-card"
-          >
-            <div class="host-info">
-              <div class="host-token">
-                <span class="token-label">Host:</span>
-                <code class="token-value">{{ hostToken }}</code>
-              </div>
-              <div class="host-stats">
-                <span class="stat">
-                  <span class="stat-icon">🌐</span>
-                  Público
-                </span>
+          <div class="creation-options">
+            <div class="private-game-toggle">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="isPrivateGame">
+                <span class="slider round"></span>
+              </label>
+              <div class="toggle-label-text">
+                <strong>Hacer juego privado</strong>
+                <small v-if="isPrivateGame">Solo podrán unirse con tu token</small>
+                <small v-else>El juego será visible en la lista pública</small>
               </div>
             </div>
-            <button
-              @click="joinGame(hostToken)"
-              class="join-button"
-              :disabled="isJoining"
+
+            <button 
+              @click="createGame" 
+              class="create-button primary-action"
+              :disabled="isCreating"
             >
-              Unirse
+              <span class="button-icon">{{ isPrivateGame ? '🔐' : '🌐' }}</span>
+              <span class="button-text">
+                <strong>Crear Servidor</strong>
+              </span>
             </button>
           </div>
         </div>
-      </div>
 
-      <!-- Sección de unirse con token manual -->
-      <div class="manual-join-section">
-        <h3>Unirse con Token</h3>
-        <div class="manual-join-form">
-          <input
-            v-model="manualToken"
-            type="text"
-            placeholder="Ingresa el token del host (ej: ABC123)"
-            class="token-input"
-            :disabled="isJoining"
-          />
-          <button 
-            @click="joinWithManualToken"
-            class="join-button"
-            :disabled="!isValidToken(manualToken) || isJoining"
-          >
-            {{ isJoining ? 'Uniéndose...' : 'Unirse' }}
-          </button>
+        <!-- Sección de unirse con token manual -->
+        <div class="manual-join-section">
+          <h3>Unirse con Token</h3>
+          <div class="manual-join-form">
+            <input
+              v-model="manualToken"
+              type="text"
+              placeholder="Ingresa el token del host (ej: ABC123)"
+              class="token-input"
+              :disabled="isJoining"
+            />
+            <button 
+              @click="joinWithManualToken"
+              class="join-button"
+              :disabled="!isValidToken(manualToken) || isJoining"
+            >
+              {{ isJoining ? 'Uniéndose...' : 'Unirse' }}
+            </button>
+          </div>
+          <p class="help-text">
+            Pídele al host que te comparta su token para unirte a su juego privado.
+          </p>
         </div>
-        <p class="help-text">
-          Pídele al host que te comparta su token para unirte a su juego privado.
-        </p>
       </div>
     </div>
 
     <!-- Estado de carga -->
-    <div v-if="isCreating || isJoining || isRefreshing" class="loading-overlay">
+    <div v-if="isCreating || isJoining" class="loading-overlay">
       <div class="loading-spinner"></div>
       <p>{{ loadingMessage }}</p>
     </div>
@@ -158,7 +108,6 @@ const lastUpdateText = computed(() => {
 const loadingMessage = computed(() => {
   if (isCreating.value) return 'Creando juego...'
   if (isJoining.value) return 'Uniéndose al juego...'
-  if (isRefreshing.value) return 'Actualizando lista...'
   return ''
 })
 
@@ -167,38 +116,20 @@ const isValidToken = (token) => {
   return token && token.trim().length >= 4 && /^[A-Za-z0-9]+$/.test(token.trim())
 }
 
-const createPublicGame = async () => {
-  if (isCreating.value) return
-  
-  isCreating.value = true
-  errorMessage.value = ''
-  
-  try {
-    // En el proxy, establecer modo host y publicar en canal 'chess_hosts'
-    connectionStore.setMode('host', 'public')
-    // La publicación en canal se maneja automáticamente en connectionStore
-    // La transición a la vista de host-waiting se manejará en App.vue
-  } catch (error) {
-    errorMessage.value = `Error al crear juego público: ${error.message}`
-    console.error('Error creating public game:', error)
-  } finally {
-    isCreating.value = false
-  }
-}
+const isPrivateGame = ref(false)
 
-const createPrivateGame = async () => {
+const createGame = async () => {
   if (isCreating.value) return
   
   isCreating.value = true
   errorMessage.value = ''
   
   try {
-    // En el proxy, establecer modo host (privado no se publica en canal)
-    connectionStore.setMode('host', 'private')
-    // La transición a la vista de host-waiting se manejará en App.vue
+    const visibilityMode = isPrivateGame.value ? 'private' : 'public'
+    connectionStore.setMode('host', visibilityMode)
   } catch (error) {
-    errorMessage.value = `Error al crear juego privado: ${error.message}`
-    console.error('Error creating private game:', error)
+    errorMessage.value = `Error al crear juego: ${error.message}`
+    console.error('Error creating game:', error)
   } finally {
     isCreating.value = false
   }
@@ -311,7 +242,7 @@ onUnmounted(() => {
 
 <style scoped>
 .lobby-view {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 20px;
 }
@@ -330,11 +261,21 @@ onUnmounted(() => {
   color: var(--color-text-secondary);
   margin: 0;
 }
-</style>
 .lobby-content {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: 20px;
+}
+
+.lobby-actions-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.public-hosts-column {
+  display: flex;
+  flex-direction: column;
 }
 
 .game-creation-section,
@@ -344,59 +285,125 @@ onUnmounted(() => {
   border-radius: 10px;
   padding: 20px;
   box-shadow: var(--shadow-sm);
+  height: 100%;
 }
 
 .game-creation-section h3,
 .public-hosts-section h3,
 .manual-join-section h3 {
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
   color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 10px;
 }
 
 .creation-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.create-button {
+/* Toggle Switch Styles */
+.private-game-toggle {
   display: flex;
   align-items: center;
   gap: 15px;
-  padding: 20px;
-  border: 2px solid transparent;
-  border-radius: 8px;
+  padding: 10px;
   background: var(--color-surface);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+}
+
+.toggle-label-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.toggle-label-text strong {
+  font-size: 15px;
+  color: var(--color-text);
+}
+
+.toggle-label-text small {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: var(--color-info);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--color-info);
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+
+.slider.round {
+  border-radius: 24px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+/* Action Button */
+.create-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 15px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-button-success);
+  color: var(--color-text-on-primary);
   cursor: pointer;
   transition: all 0.2s;
-  text-align: left;
 }
 
 .create-button:hover:not(:disabled) {
   transform: translateY(-2px);
+  background: var(--color-button-success-hover);
   box-shadow: var(--shadow-md);
-}
-
-.create-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.public-game {
-  border-color: var(--color-success);
-}
-
-.public-game:hover:not(:disabled) {
-  background: rgba(76, 175, 80, 0.1);
-}
-
-.private-game {
-  border-color: var(--color-info);
-}
-
-.private-game:hover:not(:disabled) {
-  background: rgba(33, 150, 243, 0.1);
 }
 
 .button-icon {
@@ -429,31 +436,12 @@ onUnmounted(() => {
 .refresh-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 
 .last-update {
   font-size: 12px;
   color: var(--color-text-secondary);
-}
-
-.refresh-button {
-  padding: 5px 15px;
-  background: var(--color-button-secondary);
-  color: var(--color-text-on-primary);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.refresh-button:hover:not(:disabled) {
-  background: var(--color-button-secondary-hover);
-}
-
-.refresh-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  font-style: italic;
 }
 
 .empty-state {
@@ -634,7 +622,7 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .creation-options {
+  .lobby-content {
     grid-template-columns: 1fr;
   }
   
@@ -642,11 +630,6 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
-  }
-  
-  .refresh-controls {
-    width: 100%;
-    justify-content: space-between;
   }
   
   .host-card {
@@ -658,5 +641,4 @@ onUnmounted(() => {
     align-self: flex-end;
   }
 }
-  
-
+</style>

@@ -135,9 +135,6 @@ const returnToLobby = async () => {
       await connectionStore.unsubscribe()
     }
     
-    // Cambiar modo a null (no hay setMode en proxy, solo actualizar estado local)
-    // En el proxy, el modo se maneja a través de publicación en canales
-    
     // Actualizar estado local
     connectionStore.setMode(null)
     connectionStore.setSubscribedHost(null)
@@ -148,6 +145,19 @@ const returnToLobby = async () => {
     connectionStore.setMode(null)
     connectionStore.setSubscribedHost(null)
     currentView.value = 'lobby'
+  }
+}
+
+const joinPublicGame = async (hostToken) => {
+  try {
+    connectionStore.setMode('guest')
+    const success = await connectionStore.subscribeToHost(hostToken)
+    if (!success) {
+      connectionStore.setMode(null)
+    }
+  } catch (error) {
+    console.error('Error al unirse al juego:', error)
+    connectionStore.setMode(null)
   }
 }
 
@@ -209,6 +219,29 @@ onMounted(() => {
               <button @click="autoConnect" class="reconnect-button">
                 Reconectar
               </button>
+            </div>
+          </div>
+
+          <!-- Lista de juegos públicos -->
+          <div class="public-hosts-info" v-if="connectionStore.isConnected">
+            <h4>Juegos Públicos</h4>
+            <div v-if="connectionStore.publicHosts && connectionStore.publicHosts.length === 0" class="no-hosts">
+              <p>No hay juegos disponibles.</p>
+            </div>
+            <div v-else class="hosts-mini-list">
+              <div
+                v-for="hostToken in connectionStore.publicHosts"
+                :key="hostToken"
+                class="host-mini-card"
+              >
+                <code class="host-mini-token">{{ hostToken }}</code>
+                <button
+                  @click="joinPublicGame(hostToken)"
+                  class="host-mini-join"
+                >
+                  Unirse
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -440,6 +473,69 @@ onMounted(() => {
   background: var(--color-button-secondary);
   cursor: not-allowed;
   transform: none;
+}
+
+.public-hosts-info {
+  margin-top: 16px;
+  background: var(--color-surface);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.public-hosts-info h4 {
+  margin: 0 0 12px 0;
+  color: var(--color-text);
+  font-size: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.no-hosts {
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.no-hosts p {
+  margin: 4px 0;
+}
+
+.hosts-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.host-mini-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--color-card-bg);
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+}
+
+.host-mini-token {
+  font-family: monospace;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.host-mini-join {
+  padding: 4px 12px;
+  background: var(--color-button-success);
+  color: var(--color-text-on-primary);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.host-mini-join:hover {
+  background: var(--color-button-success-hover);
 }
 
 .host-waiting-container,
