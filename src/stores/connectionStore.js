@@ -86,6 +86,14 @@ export const useConnectionStore = defineStore('connection', () => {
 
   // Nuevas acciones para protocolo de lobby con proxy
   const setMode = (newMode, newVisibility = null) => {
+    const oldMode = mode.value
+    const oldVisibility = visibility.value
+    
+    // Despublicar si estábamos como host público
+    if (oldMode === 'host' && oldVisibility === 'public' && newMode !== 'host') {
+      unpublishFromChessHosts()
+    }
+    
     mode.value = newMode
     visibility.value = newVisibility
     
@@ -174,6 +182,23 @@ export const useConnectionStore = defineStore('connection', () => {
       return true
     } catch (error) {
       console.error('Error publicando en canal chess_hosts:', error)
+      return false
+    }
+  }
+
+  const unpublishFromChessHosts = async () => {
+    if (!isConnected.value || !token.value) {
+      return false
+    }
+    
+    try {
+      if (wsProxyClient.unpublish) {
+        await wsProxyClient.unpublish('chess_hosts')
+        console.log('Host retirado del canal chess_hosts')
+      }
+      return true
+    } catch (error) {
+      console.error('Error retirando del canal chess_hosts:', error)
       return false
     }
   }
@@ -420,6 +445,7 @@ export const useConnectionStore = defineStore('connection', () => {
     clearSubscribers,
     updateLastPublicHostsUpdate,
     publishToChessHosts,
+    unpublishFromChessHosts,
     listPublicHosts,
     subscribeToHost,
     unsubscribe,

@@ -773,6 +773,39 @@ export class WebSocketProxyClient {
   }
 
   /**
+   * Unpublish from a public channel
+   * @param {string} channel Channel name
+   * @returns {Promise<void>}
+   */
+  unpublish(channel) {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket not connected'));
+        return;
+      }
+      
+      if (!this.token) {
+        reject(new Error('No token assigned yet'));
+        return;
+      }
+      
+      const payload = {
+        type: 'unpublish',
+        channel: channel
+      };
+      
+      try {
+        this.ws.send(JSON.stringify(payload));
+        console.log(`Unpublished from channel: ${channel}`);
+        resolve();
+      } catch (error) {
+        console.error('Error unpublishing from channel:', error);
+        reject(error);
+      }
+    });
+  }
+
+  /**
    * List tokens in a public channel
    * @param {string} channel Channel name
    * @returns {Promise<string[]>} Array of tokens in the channel
