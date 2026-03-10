@@ -156,7 +156,10 @@ const joinPublicGame = async (hostToken) => {
   try {
     connectionStore.setMode('guest')
     const success = await connectionStore.subscribeToHost(hostToken)
-    if (!success) {
+    if (success) {
+      // Solicitar el estado completo directamente — sin watch, sin delay de tick
+      playerGameStore.requestFullState(hostToken)
+    } else {
       connectionStore.setMode(null)
     }
   } catch (error) {

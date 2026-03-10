@@ -506,10 +506,11 @@ export class WebSocketProxyClient {
       };
       
       // Set up one-time handler for the response
-      const handler = (data) => {
-        if (data.channel === channel) {
+      // emit('channel_updated', channel, tokens, count, timestamp) → args son separados
+      const handler = (updatedChannel, tokens) => {
+        if (updatedChannel === channel) {
           this.off('channel_updated', handler);
-          resolve(data.tokens || []);
+          resolve(tokens || []);
         }
       };
       

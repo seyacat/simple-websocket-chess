@@ -2,7 +2,7 @@
 // Maneja la vista local del juego, interacción de UI y comunicación con el host
 
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useConnectionStore } from './connectionStore'
 import {
   COLORS,
@@ -408,15 +408,6 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
       console.warn('Proxy client no disponible para configurar listeners')
       return
     }
-    
-    // Cuando el guest se suscribe a un host, solicitar el estado completo inmediatamente.
-    // El watch se dispara cuando connectionStore.subscribeToHost() setea subscribedHost.
-    watch(() => connectionStore.subscribedHost, (newHost) => {
-      if (newHost && connectionStore.isGuest) {
-        console.log(`[Guest] Nuevo host detectado (${newHost}), solicitando estado completo...`)
-        requestFullState(newHost)
-      }
-    })
     
     // Handler para mensajes del host
     proxyClient.on('message', (fromToken, message, timestamp, parsedMessage) => {

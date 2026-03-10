@@ -78,7 +78,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useConnectionStore } from '@/stores/connectionStore'
 
 const connectionStore = useConnectionStore()
@@ -217,22 +217,16 @@ onMounted(() => {
     refreshPublicHosts()
     startAutoRefresh()
   }
-  
-  // Escuchar cambios en conexión para manejar auto-refresh
-  const unsubscribe = connectionStore.$subscribe(() => {
-    if (connectionStore.isConnected && !refreshInterval.value) {
-      refreshPublicHosts()
-      startAutoRefresh()
-    } else if (!connectionStore.isConnected && refreshInterval.value) {
-      stopAutoRefresh()
-    }
-  })
-  
-  // Cleanup subscription
-  onUnmounted(() => {
-    unsubscribe()
+})
+
+// Arrancar/parar el auto-refresh cuando cambia la conexión
+watch(() => connectionStore.isConnected, (connected) => {
+  if (connected && !refreshInterval.value) {
+    refreshPublicHosts()
+    startAutoRefresh()
+  } else if (!connected) {
     stopAutoRefresh()
-  })
+  }
 })
 
 onUnmounted(() => {
