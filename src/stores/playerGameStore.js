@@ -435,6 +435,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     // Si el host cerró el juego, también podríamos mostrar un mensaje
     if (gameEndData?.reason === 'host_closed_game') {
       console.log('El host cerró el juego')
+      connectionStore.setMode(null)
     }
   }
   
@@ -527,6 +528,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
       if (unpairedToken === connectionStore.subscribedHost) {
         console.log('Host desconectado, reseteando estado local del juego.')
         initializeBoard()
+        connectionStore.setMode(null)
       }
     })
   }

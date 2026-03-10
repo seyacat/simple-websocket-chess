@@ -1,30 +1,87 @@
 <template>
   <div class="phaser-chess-game">
-    <div ref="gameContainer" class="game-container"></div>
-    
-    <!-- Overlay de selección de asientos -->
-    <SeatSelectionOverlay
-      v-if="shouldShowSeatSelection"
-      @close="onSeatSelectionClose"
-    />
-    
-    <!-- Indicador de estado del jugador -->
-    <div v-if="gameInitialized && !shouldShowSeatSelection" class="player-status-indicator" :class="playerStatusClass">
-      <span class="status-icon">{{ playerStatusIcon }}</span>
-      <span class="status-text">{{ playerStatusText }}</span>
-      <button v-if="isSeated && gameStatus !== 'playing'" @click="showSeatSelection = true" class="change-seat-btn">
-        Cambiar asiento
-      </button>
+    <!-- Overlay superior: Asiento Negras -->
+    <div class="seat-bar black-seat-bar">
+      <div v-if="seats.black.occupied" class="seat-info occupied">
+        <span class="seat-icon">♚</span>
+        <span class="player-name">{{ seats.black.playerName || 'Jugador' }}</span>
+        <button 
+          v-if="mySeatColor === 'black'" 
+          @click="leaveSeat" 
+          class="leave-seat-btn"
+        >
+          Dejar Asiento
+        </button>
+      </div>
+      <div v-else class="seat-info available">
+        <span class="empty-seat">Asiento vacío (Negras)</span>
+        <button 
+          v-if="!isSeated" 
+          @click="occupySeat('black')" 
+          class="take-seat-btn black-btn"
+        >
+          Ocupar Negras
+        </button>
+      </div>
     </div>
-    
-    <div v-if="!gameInitialized" class="loading-overlay">
-      <div class="loading-spinner"></div>
-      <p>Inicializando juego...</p>
+
+    <!-- Contenedor del juego de Phaser -->
+    <div class="board-wrapper">
+      <div ref="gameContainer" class="game-container"></div>
+      
+      <div v-if="!gameInitialized" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>Inicializando juego...</p>
+      </div>
+      
+      <div v-if="gameError" class="error-overlay">
+        <p class="error-message">{{ gameError }}</p>
+        <button @click="retryInitialization" class="retry-button">Reintentar</button>
+      </div>
+
+      <!-- Mensajes flotantes del juego sobre el tablero -->
+      <div v-if="gameStatus === 'paused'" class="board-message">
+        <p>⏸️ Pausa - Esperando jugador</p>
+      </div>
+      <div v-if="gameStatus === 'waiting' && !bothSeatsOccupied" class="board-message warning">
+        <p>⏳ Esperando jugadores</p>
+      </div>
     </div>
-    
-    <div v-if="gameError" class="error-overlay">
-      <p class="error-message">{{ gameError }}</p>
-      <button @click="retryInitialization" class="retry-button">Reintentar</button>
+
+    <!-- Overlay inferior: Asiento Blancas -->
+    <div class="seat-bar white-seat-bar">
+      <div v-if="seats.white.occupied" class="seat-info occupied">
+        <span class="seat-icon">♔</span>
+        <span class="player-name">{{ seats.white.playerName || 'Jugador' }}</span>
+        <button 
+          v-if="mySeatColor === 'white'" 
+          @click="leaveSeat" 
+          class="leave-seat-btn"
+        >
+          Dejar Asiento
+        </button>
+      </div>
+      <div v-else class="seat-info available">
+        <span class="empty-seat">Asiento vacío (Blancas)</span>
+        <button 
+          v-if="!isSeated" 
+          @click="occupySeat('white')" 
+          class="take-seat-btn white-btn"
+        >
+          Ocupar Blancas
+        </button>
+      </div>
+    </div>
+
+    <!-- Información adicional (Espectadores y estado local) -->
+    <div class="game-footer-info">
+      <div class="player-status-indicator" :class="playerStatusClass">
+        <span class="status-icon">{{ playerStatusIcon }}</span>
+        <span class="status-text">{{ playerStatusText }}</span>
+      </div>
+      <div class="spectators-info">
+        Espectadores: {{ spectatorsCount }} 👁️
+      </div>
     </div>
   </div>
 </template>
@@ -35,7 +92,6 @@ import Phaser from 'phaser'
 import { useHostGameStore } from '@/stores/hostGameStore'
 import { usePlayerGameStore } from '@/stores/playerGameStore'
 import { useConnectionStore } from '@/stores/connectionStore'
-import SeatSelectionOverlay from './SeatSelectionOverlay.vue'
 
 // Props
 const props = defineProps({
@@ -50,7 +106,6 @@ const gameContainer = ref(null)
 const game = ref(null)
 const gameInitialized = ref(false)
 const gameError = ref(null)
-const showSeatSelection = ref(true) // Mostrar overlay de asientos por defecto
 
 // Stores
 const connectionStore = useConnectionStore()
@@ -141,10 +196,6 @@ const playerStatusClass = computed(() => {
   }
 })
 
-const shouldShowSeatSelection = computed(() => {
-  return showSeatSelection.value && !isSeated.value && connectionStore.isConnected
-})
-
 // Watchers
 watch(() => board.value, (newBoard) => {
   if (gameInitialized.value && game.value) {
@@ -159,10 +210,6 @@ watch(() => gameStatus.value, (newStatus) => {
 })
 
 // Métodos
-function onSeatSelectionClose() {
-  showSeatSelection.value = false
-}
-
 function retryInitialization() {
   gameError.value = null
   initializeGame()
@@ -219,7 +266,7 @@ function leaveSeat() {
   }
 }
 
-// Funciones Phaser (simplificadas - mantener la lógica existente)
+// Funciones Phaser
 function initializeGame() {
   try {
     if (!gameContainer.value) {
@@ -227,10 +274,13 @@ function initializeGame() {
       return
     }
     
+    // Scale down a bit to ensure space for the seat bars
+    const actualSize = Math.min(props.boardSize, 500)
+    
     const config = {
       type: Phaser.AUTO,
-      width: props.boardSize,
-      height: props.boardSize,
+      width: actualSize,
+      height: actualSize,
       parent: gameContainer.value,
       scene: {
         preload: preload,
@@ -248,31 +298,23 @@ function initializeGame() {
   }
 }
 
-function preload() {
-  // No necesitamos cargar imágenes externas
-  // Las texturas se crearán en create()
-}
+function preload() {}
 
 function create() {
-  // Crear texturas para cuadros del tablero
   createSquareTextures.call(this)
-  
-  // Crear tablero
   createBoard.call(this)
   updateBoardInPhaser.call(this, board.value)
 }
 
 function createSquareTextures() {
-  const squareSize = 64 // Tamaño base para la textura
+  const squareSize = 64 
   
-  // Crear textura para cuadro blanco
   const whiteGraphics = this.add.graphics()
   whiteGraphics.fillStyle(0xf0d9b5, 1) // Color beige claro
   whiteGraphics.fillRect(0, 0, squareSize, squareSize)
   whiteGraphics.generateTexture('white-square', squareSize, squareSize)
   whiteGraphics.destroy()
   
-  // Crear textura para cuadro negro
   const blackGraphics = this.add.graphics()
   blackGraphics.fillStyle(0xb58863, 1) // Color marrón
   blackGraphics.fillRect(0, 0, squareSize, squareSize)
@@ -280,13 +322,10 @@ function createSquareTextures() {
   blackGraphics.destroy()
 }
 
-function update() {
-  // Lógica de actualización (mantener lógica existente)
-}
+function update() {}
 
 function createBoard() {
-  // Implementación existente del tablero Phaser
-  const squareSize = props.boardSize / 8
+  const squareSize = game.value.config.width / 8
   
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
@@ -309,21 +348,18 @@ function createBoard() {
 }
 
 function updateBoardInPhaser(newBoard) {
-  // Actualizar tablero Phaser con el nuevo estado
   if (!game.value || !game.value.scene) return
   
   const scene = game.value.scene.getScene('default')
   if (!scene) return
   
-  // Limpiar piezas existentes
   if (scene.pieceGroup) {
     scene.pieceGroup.clear(true, true)
   } else {
     scene.pieceGroup = scene.add.group()
   }
   
-  // Crear piezas en el tablero
-  const squareSize = props.boardSize / 8
+  const squareSize = game.value.config.width / 8
   
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
@@ -333,7 +369,6 @@ function updateBoardInPhaser(newBoard) {
       const x = col * squareSize + squareSize / 2
       const y = row * squareSize + squareSize / 2
       
-      // Crear texto para representar la pieza
       const pieceText = scene.add.text(x, y, getPieceSymbol(piece), {
         fontSize: Math.floor(squareSize * 0.6) + 'px',
         fontFamily: 'Arial, sans-serif',
@@ -347,9 +382,39 @@ function updateBoardInPhaser(newBoard) {
       scene.pieceGroup.add(pieceText)
     }
   }
+  
+  // Highlight valid moves if there is a selected piece
+  if (selectedPiece.value) {
+     highlightValidMoves.call(scene, validMoves.value, squareSize)
+  }
 }
 
-// Función auxiliar para obtener símbolo de pieza
+function highlightValidMoves(moves, squareSize) {
+   // Add highlight indicators (small circles) for valid moves
+   const scene = this
+   if (!scene.highlightGroup) {
+      scene.highlightGroup = scene.add.group()
+   } else {
+      scene.highlightGroup.clear(true, true)
+   }
+   
+   moves.forEach(move => {
+      const x = move.col * squareSize + squareSize / 2
+      const y = move.row * squareSize + squareSize / 2
+      
+      const dot = scene.add.circle(x, y, squareSize * 0.15, 0x000000, 0.3)
+      scene.highlightGroup.add(dot)
+   })
+}
+
+// Modified watcher to redraw valid moves
+watch(() => selectedPiece.value, () => {
+   if (gameInitialized.value && game.value) {
+      updateBoardInPhaser(board.value) // Redraws everything including highlights
+   }
+})
+
+
 function getPieceSymbol(piece) {
   const pieceMap = {
     'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
@@ -358,16 +423,12 @@ function getPieceSymbol(piece) {
   return pieceMap[piece] || piece
 }
 
-// Función auxiliar para obtener color de pieza
 function getPieceColor(piece) {
   if (!piece) return null
   return piece === piece.toUpperCase() ? 'white' : 'black'
 }
 
-function updateGameStatusInPhaser(newStatus) {
-  // Actualizar UI de estado del juego en Phaser
-  // (mantener lógica existente)
-}
+function updateGameStatusInPhaser(newStatus) {}
 
 // Lifecycle hooks
 onMounted(() => {
@@ -381,7 +442,7 @@ onBeforeUnmount(() => {
   }
 })
 
-// Exponer métodos para el componente padre (si es necesario)
+// Exponer métodos para el componente padre
 defineExpose({
   occupySeat,
   leaveSeat,
@@ -391,14 +452,168 @@ defineExpose({
 
 <style scoped>
 .phaser-chess-game {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
   height: 100%;
+  gap: 15px;
+  padding: 10px;
+}
+
+.seat-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  padding: 10px 15px;
+  border-radius: 8px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.black-seat-bar {
+  border-top: 4px solid #212121;
+}
+
+.white-seat-bar {
+  border-bottom: 4px solid #f5f5f5;
+}
+
+.seat-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.seat-icon {
+  font-size: 24px;
+}
+
+.player-name {
+  font-weight: bold;
+  flex-grow: 1;
+}
+
+.empty-seat {
+  color: var(--color-text-secondary);
+  font-style: italic;
+  flex-grow: 1;
+}
+
+.take-seat-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.black-btn {
+  background-color: #424242;
+}
+
+.black-btn:hover {
+  background-color: #212121;
+}
+
+.white-btn {
+  background-color: #e0e0e0;
+  color: #000;
+}
+
+.white-btn:hover {
+  background-color: #bdbdbd;
+}
+
+.leave-seat-btn {
+  padding: 8px 16px;
+  background-color: var(--color-warning);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.leave-seat-btn:hover {
+  background-color: #e65100;
+}
+
+.board-wrapper {
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
 }
 
 .game-container {
+  display: flex;
+  justify-content: center;
+}
+
+.board-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(33, 150, 243, 0.85);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.board-message.warning {
+  background: rgba(255, 152, 0, 0.85);
+}
+
+.game-footer-info {
+  display: flex;
+  justify-content: space-between;
   width: 100%;
-  height: 100%;
+  max-width: 500px;
+  align-items: center;
+  padding: 5px 10px;
+}
+
+.player-status-indicator {
+  padding: 6px 12px;
+  border-radius: 20px;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.player-status-seated.player-status-white {
+  border-left: 4px solid #f5f5f5;
+}
+
+.player-status-seated.player-status-black {
+  border-left: 4px solid #212121;
+}
+
+.player-status-spectator {
+  border-left: 4px solid gray;
+}
+
+.player-status-no-seat {
+  border-left: 4px solid orange;
+}
+
+.spectators-info {
+  font-size: 14px;
+  color: var(--color-text-secondary);
 }
 
 .loading-overlay,
@@ -414,50 +629,5 @@ defineExpose({
   align-items: center;
   background-color: rgba(0, 0, 0, 0.7);
   color: white;
-  z-index: 1000;
-}
-
-.player-status-indicator {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background-color: rgba(0, 0, 0, 0.7);
-  color: white;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 100;
-}
-
-.player-status-seated.player-status-white {
-  border-left: 4px solid white;
-}
-
-.player-status-seated.player-status-black {
-  border-left: 4px solid black;
-}
-
-.player-status-spectator {
-  border-left: 4px solid gray;
-}
-
-.player-status-no-seat {
-  border-left: 4px solid orange;
-}
-
-.change-seat-btn {
-  margin-left: 8px;
-  padding: 4px 8px;
-  background-color: #4a5568;
-  color: white;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.change-seat-btn:hover {
-  background-color: #2d3748;
 }
 </style>
