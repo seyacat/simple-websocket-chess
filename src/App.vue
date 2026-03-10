@@ -5,11 +5,13 @@ import PhaserChessGame from './components/chess/PhaserChessGame.vue'
 import { useGameStore } from './stores/gameStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useHostGameStore } from '@/stores/hostGameStore'
+import { usePlayerGameStore } from '@/stores/playerGameStore'
 
 // Stores
 const gameStore = useGameStore()
 const connectionStore = useConnectionStore()
 const hostGameStore = useHostGameStore()
+const playerGameStore = usePlayerGameStore()
 
 // Estado local
 const showGameControls = ref(true)
@@ -123,25 +125,27 @@ const returnToLobby = async () => {
   try {
     // Si somos host, destruir la instancia del host primero
     if (connectionStore.isHost) {
-      // Notificar a todos los guests que el host está cerrando el juego
       hostGameStore.destroyHostInstance()
-      
-      // Esperar un momento para que los guests reciban la notificación
       await new Promise(resolve => setTimeout(resolve, 500))
     }
     
-    // Si estamos suscritos como guest, desuscribirse primero
+    // Si estamos suscritos como guest, desuscribirse y resetear estado local
     if (connectionStore.isGuest && connectionStore.subscribedHost) {
       await connectionStore.unsubscribe()
     }
     
-    // Actualizar estado local
+    // Resetear estado del juego del guest (seats, playerColor, board, etc.)
+    if (connectionStore.isGuest) {
+      playerGameStore.resetLocalGame()
+    }
+    
+    // Actualizar estado de conexión
     connectionStore.setMode(null)
     connectionStore.setSubscribedHost(null)
     currentView.value = 'lobby'
   } catch (error) {
     console.error('Error al volver al lobby:', error)
-    // Fallback: actualizar estado local aunque falle el servidor
+    playerGameStore.resetLocalGame()
     connectionStore.setMode(null)
     connectionStore.setSubscribedHost(null)
     currentView.value = 'lobby'

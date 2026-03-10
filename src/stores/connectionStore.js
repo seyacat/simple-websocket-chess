@@ -21,6 +21,9 @@ export const useConnectionStore = defineStore('connection', () => {
   // Mapeo de localId a token para comunicación transparente
   const localIdToTokenMap = ref(new Map())
   
+  // Guard: evitar registrar listeners duplicados al reconectar
+  let handlersSetup = false
+  
   // Getters
   const connectionStatus = computed(() => {
     if (connectionError.value) return 'error'
@@ -30,6 +33,7 @@ export const useConnectionStore = defineStore('connection', () => {
 
   const hasToken = computed(() => !!token.value)
   const canPlay = computed(() => isConnected.value && subscribedHost.value)
+  const shortToken = computed(() => token.value) // alias usado por componentes
   
   // Nuevos getters para protocolo de lobby
   const isHost = computed(() => mode.value === 'host')
@@ -276,28 +280,24 @@ export const useConnectionStore = defineStore('connection', () => {
     }
   }
 
-  const broadcastToSubscribers = async (message) => {
+  const broadcastToSubscribers = (message) => {
     if (!isConnected.value || !token.value || subscribers.value.length === 0) {
-      return false
+      return
     }
     
-    try {
-      // Enviar mensaje a cada subscriber individualmente
-      for (const subscriberToken of subscribers.value) {
-        await wsProxyClient.send(subscriberToken, message)
-      }
-      return true
-    } catch (error) {
-      console.error('Error enviando broadcast:', error)
-      return false
+    // Enviar a todos los subscribers en paralelo (fire-and-forget)
+    // message_sent es solo informativo, no bloqueamos esperando confirmación
+    for (const subscriberToken of subscribers.value) {
+      wsProxyClient.send(subscriberToken, message).catch(error => {
+        console.error(`Error enviando a subscriber ${subscriberToken}:`, error)
+      })
     }
   }
 
-  // Configurar handlers de eventos del proxy
+  // Configurar handlers de eventos del proxy (solo se ejecuta una vez)
   const setupProxyEventHandlers = () => {
-    // Limpiar handlers anteriores si existen
-    // Nota: WebSocketProxyClient no tiene método off para todos los handlers
-    // Se asume que se llama una vez durante la inicialización
+    if (handlersSetup) return
+    handlersSetup = true
     
     // Token asignado al conectar
     wsProxyClient.on('token_assigned', (assignedToken) => {
@@ -331,9 +331,8 @@ export const useConnectionStore = defineStore('connection', () => {
     
     // Mensaje recibido
     wsProxyClient.on('message', (fromToken, message, timestamp, parsedMessage) => {
-      console.log(`Mensaje recibido de ${fromToken}:`, message)
-      // Los mensajes específicos del juego serán manejados por los stores de juego
-      // Este store solo maneja mensajes de control del lobby
+      // Los mensajes específicos del juego son manejados por los stores de juego
+      // Este store no necesita loguear cada mensaje
     })
     
     // Handshake request (para hosts)
@@ -399,6 +398,7 @@ export const useConnectionStore = defineStore('connection', () => {
   return {
     // Estado
     token,
+    shortToken,
     isConnected,
     connectionError,
     wsUrl,

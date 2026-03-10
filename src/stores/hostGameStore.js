@@ -469,11 +469,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     }
     
     const message = formatWebSocketMessage(type, data)
-    
-    // Usar comando de broadcast explícito
-    connectionStore.broadcastToSubscribers(message).catch(error => {
-      console.error('Error enviando broadcast:', error)
-    })
+    connectionStore.broadcastToSubscribers(message)
   }
   
   /**
@@ -660,7 +656,10 @@ export const useHostGameStore = defineStore('hostGame', () => {
   }
   
   // Inicializar WebSocket listeners para mensajes directos de guests
+  let wsListenersInitialized = false
   function initWebSocketListeners() {
+    if (wsListenersInitialized) return
+    wsListenersInitialized = true
     const proxyClient = connectionStore.wsProxyClient()
     
     if (!proxyClient) {
@@ -681,9 +680,21 @@ export const useHostGameStore = defineStore('hostGame', () => {
     proxyClient.on('paired', (pairedToken) => {
       if (!connectionStore.isHost) return
       
-      // Podríamos enviar el estado actual al nuevo guest
-      // Por ahora solo lo agregamos como espectador
+      // Agregar como espectador
       addSpectator(pairedToken, `Guest`)
+      
+      // Enviar estado completo del juego al nuevo guest para que sincronice
+      const fullStateMsg = formatWebSocketMessage(MESSAGE_TYPES.GAME_STATE_UPDATE, {
+        board: gameState.value.board,
+        currentTurn: gameState.value.currentTurn,
+        gameStatus: gameState.value.gameStatus,
+        moveHistory: gameState.value.moveHistory,
+        seats: gameState.value.seats,
+        spectators: gameState.value.spectators
+      })
+      connectionStore.sendMessage(pairedToken, fullStateMsg).catch(err => {
+        console.error('Error enviando estado inicial a guest:', err)
+      })
     })
     
     // Handler para guests desconectados (evento unpaired)
@@ -717,6 +728,12 @@ export const useHostGameStore = defineStore('hostGame', () => {
     hostAsPlayerColor,
     hostSelectedPiece,
     hostValidMoves,
+    
+    // Aliases para interfaz unificada con playerGameStore (usados por PhaserChessGame)
+    selectedPiece: hostSelectedPiece,
+    validMoves: hostValidMoves,
+    playerColor: hostAsPlayerColor,
+    isMyTurn: isHostTurn,
     
     // Getters
     isHostPlaying,

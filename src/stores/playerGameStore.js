@@ -72,9 +72,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     return null
   })
   
-  const boardState = computed(() => {
-    return board.value.map(row => [...row])
-  })
+  const boardState = computed(() => board.value)
   
   const isSeated = computed(() => {
     return seats.value.white.playerToken === connectionStore.token ||
@@ -386,6 +384,16 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     if (gameState.moveHistory) moveHistory.value = gameState.moveHistory
     if (gameState.seats) seats.value = gameState.seats
     if (gameState.spectators) spectators.value = gameState.spectators
+    
+    // Detectar el color del jugador mirando los asientos recibidos
+    const myToken = connectionStore.token
+    if (myToken && gameState.seats) {
+      if (gameState.seats.white?.playerToken === myToken) {
+        playerColor.value = COLORS.WHITE
+      } else if (gameState.seats.black?.playerToken === myToken) {
+        playerColor.value = COLORS.BLACK
+      }
+    }
   }
   
   /**
@@ -397,14 +405,16 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
       seats.value = seatsUpdate.seats
     }
     
-    // Actualizar playerColor si soy yo quien ocupó/liberó el asiento
-    if (seatsUpdate.changedColor && seatsUpdate.playerToken === connectionStore.token) {
-      if (seats.value[seatsUpdate.changedColor].playerToken === connectionStore.token) {
-        playerColor.value = seatsUpdate.changedColor
-      } else if (mySeatColor.value === seatsUpdate.changedColor) {
-        // Liberamos nuestro asiento
-        playerColor.value = COLORS.WHITE // Reset a valor por defecto
+    // Detectar nuestro color mirando los asientos (no depender de seatsUpdate.playerToken
+    // que contiene el token del jugador que hizo el cambio, no necesariamente el nuestro)
+    const myToken = connectionStore.token
+    if (myToken && seats.value) {
+      if (seats.value.white?.playerToken === myToken) {
+        playerColor.value = COLORS.WHITE
+      } else if (seats.value.black?.playerToken === myToken) {
+        playerColor.value = COLORS.BLACK
       }
+      // Si no estamos en ningún asiento, no reseteamos playerColor a menos que estuviera seteado
     }
   }
   
@@ -492,7 +502,10 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   }
   
   // Inicializar WebSocket listeners
+  let wsListenersInitialized = false
   function initWebSocketListeners() {
+    if (wsListenersInitialized) return
+    wsListenersInitialized = true
     const proxyClient = connectionStore.wsProxyClient()
     
     if (!proxyClient) {
@@ -502,23 +515,22 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     
     // Handler para mensajes recibidos del host
     proxyClient.on('message', (fromToken, message, timestamp, parsedMessage) => {
-      // Solo procesar mensajes del host al que estamos suscritos
-      if (fromToken === connectionStore.subscribedHost) {
-        try {
-          // Parsear el mensaje (puede venir ya parseado como parsedMessage)
-          let parsed
-          if (parsedMessage) {
-            parsed = parsedMessage
-          } else {
-            parsed = parseWebSocketMessage(message)
-          }
-          
-          if (parsed && parsed.type) {
-            applyUpdateFromHost(parsed.type, parsed.data)
-          }
-        } catch (error) {
-          console.error('Error procesando mensaje del host:', error)
+      // Aceptar mensajes del host suscrito, O de un token con el que acabamos de
+      // completar el handshake (subscribedHost puede no estar seteado aún cuando
+      // llega el primer mensaje de sincronización)
+      const isFromHost = fromToken === connectionStore.subscribedHost ||
+        (!connectionStore.subscribedHost && connectionStore.isGuest && proxyClient.hasConnection(fromToken))
+
+      if (!isFromHost) return
+
+      try {
+        // Game messages usan formato TYPE|JSON, parsedMessage es null para ellos
+        const parsed = parsedMessage || parseWebSocketMessage(message)
+        if (parsed && parsed.type) {
+          applyUpdateFromHost(parsed.type, parsed.data)
         }
+      } catch (error) {
+        console.error('Error procesando mensaje del host:', error)
       }
     })
     

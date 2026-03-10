@@ -440,7 +440,7 @@ export class WebSocketProxyClient {
     conn.lastMessage = timestamp;
     conn.messageCount = (conn.messageCount || 0) + 1;
     
-    console.log(`Message from ${from}: ${message}`);
+    console.log(`Message from ${from}: ${message.substring(0, 60)}`);
     this.emit('message', from, message, timestamp, parsedMessage);
   }
 
@@ -452,12 +452,10 @@ export class WebSocketProxyClient {
     const { sent, total, failed, timestamp } = data;
     
     if (failed && failed.length > 0) {
-      console.log(`Message sent: ${sent}/${total} successful. Failed: ${failed.join(', ')}`);
+      console.warn(`Message partial: ${sent}/${total}. Failed: ${failed.join(', ')}`);
       this.emit('message_partial', { sent, total, failed, timestamp });
-    } else {
-      console.log(`Message sent: ${sent}/${total} successful`);
-      this.emit('message_delivered', { sent, total, timestamp });
     }
+    // Si no hay fallos, es solo informativo — no loguear ni emitir
   }
 
   /**
@@ -491,7 +489,23 @@ export class WebSocketProxyClient {
    */
   handleDisconnectConfirmation(data) {
     const { target, timestamp } = data;
-    console.log(`Disconnect confirmed from ${target} at ${timestamp}`);
+    
+    // Limpiar activeConnections silenciosamente para que al reconectar
+    // se emita 'paired' correctamente. NO emitimos 'unpaired' aquí porque:
+    // 1. 'unpaired' es para cuando el OTRO lado se desconecta inesperadamente
+    // 2. Emitirlo aquí crea race condition si la confirmación llega DESPUÉS
+    //    de que el guest ya reconectó (borraría el nuevo subscribedHost)
+    if (this.activeConnections.has(target)) {
+      this.activeConnections.delete(target);
+    }
+    
+    // Limpiar mapeos de localId
+    const localId = this.tokenToLocalIdMap.get(target);
+    if (localId) {
+      this.localIdToTokenMap.delete(localId);
+      this.tokenToLocalIdMap.delete(target);
+    }
+    
     this.emit('disconnect_confirmed', target, timestamp);
   }
 
@@ -642,9 +656,8 @@ export class WebSocketProxyClient {
       
       try {
         this.ws.send(JSON.stringify(payload));
-        console.log(`Message sent to ${targetTokens.length} target(s): ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`);
         
-        // Add to active connections for each target
+        // Agregar a active connections para cada target
         targetTokens.forEach(token => {
           if (!this.activeConnections.has(token)) {
             this.activeConnections.set(token, {
