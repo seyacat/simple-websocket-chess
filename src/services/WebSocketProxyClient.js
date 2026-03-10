@@ -3,7 +3,7 @@
  * 
  * Client library for connecting to the simplified WebSocket proxy server.
  * Features:
- * - Reconnection logic with local identifier handshake
+ * - Reconnection logic
  * - Channel support (publish/list)
  * - Active connections tracking
  * - Event-based API
@@ -17,7 +17,6 @@ export class WebSocketProxyClient {
    * @param {boolean} options.autoReconnect Enable auto-reconnection (default: true)
    * @param {number} options.maxReconnectAttempts Maximum reconnection attempts (default: 5)
    * @param {number} options.reconnectDelay Delay between reconnection attempts in ms (default: 3000)
-   * @param {string} options.localIdentifier Local identifier for handshake (auto-generated if not provided)
    */
   constructor(options = {}) {
     // Configuration
@@ -25,8 +24,7 @@ export class WebSocketProxyClient {
       url: options.url || 'ws://localhost:4001',
       autoReconnect: options.autoReconnect !== false,
       maxReconnectAttempts: options.maxReconnectAttempts || 5,
-      reconnectDelay: options.reconnectDelay || 3000,
-      localIdentifier: options.localIdentifier || this.generateLocalIdentifier()
+      reconnectDelay: options.reconnectDelay || 3000
     };
 
     // Connection state
@@ -39,11 +37,6 @@ export class WebSocketProxyClient {
     // Data stores
     this.activeConnections = new Map(); // token -> {metadata}
     this.channelSubscriptions = new Map(); // channel -> {tokens, lastUpdate}
-    this.waitingHandshakes = new Map(); // messageId -> {targetToken, localId, timestamp, timeout}
-    
-    // Local ID to token mapping for transparent communication
-    this.localIdToTokenMap = new Map(); // localId -> currentToken
-    this.tokenToLocalIdMap = new Map(); // token -> localId (reverse mapping)
     
     // Event system
     this.eventHandlers = new Map();
@@ -53,40 +46,6 @@ export class WebSocketProxyClient {
     this.handleMessage = this.handleMessage.bind(this);
     this.handleClose = this.handleClose.bind(this);
     this.handleError = this.handleError.bind(this);
-  }
-
-  /**
-   * Generate a local identifier for handshake
-   * @returns {string} Local identifier
-   */
-  generateLocalIdentifier() {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 10);
-    return `local_${timestamp}_${random}`;
-  }
-
-  /**
-   * Update local ID to token mapping
-   * @private
-   * @param {string} localId Local identifier
-   * @param {string} token Server token
-   */
-  _updateLocalIdMapping(localId, token) {
-    const previousToken = this.localIdToTokenMap.get(localId);
-    
-    // Update forward mapping
-    this.localIdToTokenMap.set(localId, token);
-    
-    // Update reverse mapping
-    this.tokenToLocalIdMap.set(token, localId);
-    
-    // Clean up previous token mapping if it changed
-    if (previousToken && previousToken !== token) {
-      this.tokenToLocalIdMap.delete(previousToken);
-      this.emit('token_updated', { localId, oldToken: previousToken, newToken: token });
-    } else if (!previousToken) {
-      this.emit('local_id_mapped', { localId, token });
-    }
   }
 
   /**
@@ -141,130 +100,7 @@ export class WebSocketProxyClient {
     this._isConnected = true;
     this.reconnectAttempts = 0;
 
-    this.emit('connect', this.config.localIdentifier);
-  }
-
-  /**
-   * Initiate a handshake with another client
-   * @param {string} targetToken Target client token
-   * @param {number} timeoutMs Timeout in milliseconds (default: 30000)
-   * @returns {Promise<string>} Promise that resolves with handshake messageId
-   */
-  initiateHandshake(targetToken, timeoutMs = 30000) {
-    return new Promise((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket not connected'));
-        return;
-      }
-
-      if (!this.token) {
-        reject(new Error('No token assigned yet'));
-        return;
-      }
-
-      if (targetToken === this.token) {
-        reject(new Error('Cannot handshake with yourself'));
-        return;
-      }
-
-      // Generate a unique message ID for this handshake (0-99)
-      const messageId = Math.floor(Math.random() * 100);
-      
-      const handshakeMessage = {
-        to: [targetToken],
-        message: JSON.stringify({
-          type: 'handshake',
-          localId: this.config.localIdentifier,
-          messageId: messageId,
-          timestamp: new Date().toISOString()
-        })
-      };
-
-      // Store waiting handshake
-      const handshakeData = {
-        targetToken,
-        localId: this.config.localIdentifier,
-        timestamp: Date.now(),
-        timeout: null,
-        resolve,
-        reject
-      };
-
-      this.waitingHandshakes.set(messageId, handshakeData);
-
-      // Set timeout for handshake response
-      handshakeData.timeout = setTimeout(() => {
-        this.waitingHandshakes.delete(messageId);
-        reject(new Error(`Handshake timeout with ${targetToken}`));
-        this.emit('handshake_timeout', { targetToken, messageId });
-      }, timeoutMs);
-
-      try {
-        this.ws.send(JSON.stringify(handshakeMessage));
-        console.log(`Handshake initiated with ${targetToken}, messageId: ${messageId}`);
-        resolve(messageId);
-      } catch (error) {
-        this.waitingHandshakes.delete(messageId);
-        if (handshakeData.timeout) {
-          clearTimeout(handshakeData.timeout);
-        }
-        console.error('Error sending handshake:', error);
-        reject(error);
-      }
-    });
-  }
-
-  /**
-   * Respond to an incoming handshake
-   * @param {Object} handshakeData Incoming handshake data
-   * @param {string} responseMessage Optional response message
-   */
-  respondToHandshake(handshakeData, responseMessage = 'handshake_accepted') {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.error('Cannot respond to handshake: WebSocket not connected');
-      return;
-    }
-
-    if (!this.token) {
-      console.error('Cannot respond to handshake: No token assigned');
-      return;
-    }
-
-    const { from, messageId, localId } = handshakeData;
-    
-    const response = {
-      to: [from],
-      message: JSON.stringify({
-        type: 'handshake_response',
-        responseId: messageId,
-        localId: this.config.localIdentifier,
-        response: responseMessage,
-        timestamp: new Date().toISOString()
-      })
-    };
-
-    try {
-      this.ws.send(JSON.stringify(response));
-      console.log(`Handshake response sent to ${from} for messageId: ${messageId}`);
-      
-      // Add to active connections
-      if (!this.activeConnections.has(from)) {
-        this.activeConnections.set(from, {
-          connectedAt: Date.now(),
-          lastMessage: null,
-          messageCount: 0,
-          handshakeCompleted: true
-        });
-        this.emit('paired', from);
-      }
-      
-      // Update local ID to token mapping for transparent communication
-      this._updateLocalIdMapping(localId, from);
-      
-      this.emit('handshake_responded', { targetToken: from, messageId, localId });
-    } catch (error) {
-      console.error('Error sending handshake response:', error);
-    }
+    this.emit('connect');
   }
 
   /**
@@ -325,7 +161,7 @@ export class WebSocketProxyClient {
    */
   handleConnected(data) {
     this.token = data.token;
-    console.log(`Connected to server. Token: ${this.token}, Timestamp: ${data.timestamp}`);
+    console.log(`Connected to server. Token: ${this.token}`);
     
     this.emit('token_assigned', this.token);
   }
@@ -337,109 +173,27 @@ export class WebSocketProxyClient {
   handleIncomingMessage(data) {
     const { from, message, timestamp } = data;
     
-    try {
-      // Try to parse message as JSON (for handshake messages)
-      const parsedMessage = JSON.parse(message);
-      
-      if (parsedMessage.type === 'handshake') {
-        // Handle incoming handshake request
-        const { localId, messageId, timestamp: handshakeTimestamp } = parsedMessage;
-        
-        console.log(`Handshake request from ${from}, localId: ${localId}, messageId: ${messageId}`);
-        this.emit('handshake_request', {
-          from,
-          localId,
-          messageId,
-          timestamp: handshakeTimestamp,
-          rawMessage: message
-        });
-        
-        // Auto-respond to handshake (can be overridden by application)
-        this.respondToHandshake({ from, messageId, localId });
-        return;
-      }
-      
-      if (parsedMessage.type === 'handshake_response') {
-        // Handle handshake response
-        const { responseId, localId, response, timestamp: responseTimestamp } = parsedMessage;
-        
-        console.log(`Handshake response from ${from}, responseId: ${responseId}, response: ${response}`);
-        
-        // Check if we have a waiting handshake with this responseId
-        if (this.waitingHandshakes.has(responseId)) {
-          const handshakeData = this.waitingHandshakes.get(responseId);
-          
-          // Clear timeout
-          if (handshakeData.timeout) {
-            clearTimeout(handshakeData.timeout);
-          }
-          
-          // Remove from waiting handshakes
-          this.waitingHandshakes.delete(responseId);
-          
-          // Resolve the promise if it exists
-          if (handshakeData.resolve) {
-            handshakeData.resolve(responseId);
-          }
-          
-          // Add to active connections
-          if (!this.activeConnections.has(from)) {
-            this.activeConnections.set(from, {
-              connectedAt: Date.now(),
-              lastMessage: null,
-              messageCount: 0,
-              handshakeCompleted: true,
-              remoteLocalId: localId
-            });
-            this.emit('paired', from);
-          }
-          
-          // Update local ID to token mapping for transparent communication
-          this._updateLocalIdMapping(localId, from);
-          
-          this.emit('handshake_completed', {
-            targetToken: from,
-            messageId: responseId,
-            localId,
-            response,
-            timestamp: responseTimestamp
-          });
-        } else {
-          console.warn(`Received handshake response for unknown messageId: ${responseId}`);
-          this.emit('handshake_unknown_response', { from, responseId, localId });
-        }
-        return;
-      }
-      
-      // Regular JSON message - emit as normal
-      this.emitMessage(from, message, parsedMessage, timestamp);
-      
-    } catch (error) {
-      // Message is not JSON, treat as regular text message
-      this.emitMessage(from, message, null, timestamp);
-    }
-  }
-  
-  /**
-   * Emit a regular message
-   * @private
-   */
-  emitMessage(from, message, parsedMessage, timestamp) {
-    // Add to active connections if not already there
+    // Track the sender as an active connection
     if (!this.activeConnections.has(from)) {
       this.activeConnections.set(from, {
         connectedAt: Date.now(),
         lastMessage: timestamp,
         messageCount: 0
       });
-      this.emit('paired', from);
     }
     
-    // Update connection info
     const conn = this.activeConnections.get(from);
     conn.lastMessage = timestamp;
     conn.messageCount = (conn.messageCount || 0) + 1;
-    
+
+    // Try to parse as JSON
+    let parsedMessage = null;
+    try {
+      parsedMessage = JSON.parse(message);
+    } catch (e) {
+      // Not JSON, treat as plain text
+    }
+
     console.log(`Message from ${from}: ${message.substring(0, 60)}`);
     this.emit('message', from, message, timestamp, parsedMessage);
   }
@@ -455,7 +209,6 @@ export class WebSocketProxyClient {
       console.warn(`Message partial: ${sent}/${total}. Failed: ${failed.join(', ')}`);
       this.emit('message_partial', { sent, total, failed, timestamp });
     }
-    // Si no hay fallos, es solo informativo — no loguear ni emitir
   }
 
   /**
@@ -471,14 +224,6 @@ export class WebSocketProxyClient {
       this.emit('unpaired', token, timestamp);
     }
     
-    // Clean up local ID to token mappings
-    const localId = this.tokenToLocalIdMap.get(token);
-    if (localId) {
-      this.localIdToTokenMap.delete(localId);
-      this.tokenToLocalIdMap.delete(token);
-      this.emit('local_id_unmapped', { localId, token, timestamp });
-    }
-    
     console.log(`Disconnected from ${token} at ${timestamp}`);
     this.emit('peer_disconnected', token, timestamp);
   }
@@ -490,20 +235,8 @@ export class WebSocketProxyClient {
   handleDisconnectConfirmation(data) {
     const { target, timestamp } = data;
     
-    // Limpiar activeConnections silenciosamente para que al reconectar
-    // se emita 'paired' correctamente. NO emitimos 'unpaired' aquí porque:
-    // 1. 'unpaired' es para cuando el OTRO lado se desconecta inesperadamente
-    // 2. Emitirlo aquí crea race condition si la confirmación llega DESPUÉS
-    //    de que el guest ya reconectó (borraría el nuevo subscribedHost)
     if (this.activeConnections.has(target)) {
       this.activeConnections.delete(target);
-    }
-    
-    // Limpiar mapeos de localId
-    const localId = this.tokenToLocalIdMap.get(target);
-    if (localId) {
-      this.localIdToTokenMap.delete(localId);
-      this.tokenToLocalIdMap.delete(target);
     }
     
     this.emit('disconnect_confirmed', target, timestamp);
@@ -556,18 +289,6 @@ export class WebSocketProxyClient {
     console.log(`WebSocket disconnected: ${event.code} ${event.reason || 'No reason'}`);
     this._isConnected = false;
     this.token = null;
-    
-    // Clear waiting handshakes on disconnect
-    for (const [messageId, handshakeData] of this.waitingHandshakes) {
-      if (handshakeData.timeout) {
-        clearTimeout(handshakeData.timeout);
-      }
-      // Reject any pending promises
-      if (handshakeData.reject) {
-        handshakeData.reject(new Error('Connection closed'));
-      }
-    }
-    this.waitingHandshakes.clear();
     
     // Clear active connections on disconnect
     const disconnectedTokens = Array.from(this.activeConnections.keys());
@@ -643,7 +364,6 @@ export class WebSocketProxyClient {
         return;
       }
       
-      // Check if sending to self
       if (targetTokens.includes(this.token)) {
         reject(new Error('Cannot send message to yourself'));
         return;
@@ -656,62 +376,12 @@ export class WebSocketProxyClient {
       
       try {
         this.ws.send(JSON.stringify(payload));
-        
-        // Agregar a active connections para cada target
-        targetTokens.forEach(token => {
-          if (!this.activeConnections.has(token)) {
-            this.activeConnections.set(token, {
-              connectedAt: Date.now(),
-              lastMessage: null,
-              messageCount: 0
-            });
-            this.emit('paired', token);
-          }
-        });
-        
         resolve();
       } catch (error) {
         console.error('Error sending message:', error);
         reject(error);
       }
     });
-  }
-
-  /**
-   * Send a message to one or more targets using their local IDs
-   * @param {string|string[]} localIds Target's local identifier(s)
-   * @param {string} message Message content
-   * @returns {Promise<void>}
-   */
-  sendTo(localIds, message) {
-    // Convert to array if single ID
-    const localIdArray = Array.isArray(localIds) ? localIds : [localIds];
-    
-    if (localIdArray.length === 0) {
-      return Promise.reject(new Error('No target local IDs specified'));
-    }
-    
-    // Map local IDs to tokens
-    const tokens = [];
-    const missingLocalIds = [];
-    
-    for (const localId of localIdArray) {
-      const token = this.localIdToTokenMap.get(localId);
-      if (token) {
-        tokens.push(token);
-      } else {
-        missingLocalIds.push(localId);
-      }
-    }
-    
-    if (missingLocalIds.length > 0) {
-      return Promise.reject(new Error(
-        `No active connection with local ID(s): ${missingLocalIds.join(', ')}. Handshake may not be completed.`
-      ));
-    }
-    
-    // Use the existing send method with the mapped tokens
-    return this.send(tokens, message);
   }
 
   /**
@@ -872,18 +542,6 @@ export class WebSocketProxyClient {
       this.reconnectTimer = null;
     }
     
-    // Clear all waiting handshake timeouts
-    for (const [messageId, handshakeData] of this.waitingHandshakes) {
-      if (handshakeData.timeout) {
-        clearTimeout(handshakeData.timeout);
-      }
-      // Reject any pending promises
-      if (handshakeData.reject) {
-        handshakeData.reject(new Error('Client disconnected'));
-      }
-    }
-    this.waitingHandshakes.clear();
-    
     // Close WebSocket connection
     if (this.ws) {
       this.ws.close(1000, 'Client disconnect');
@@ -917,39 +575,6 @@ export class WebSocketProxyClient {
   }
 
   /**
-   * Get local identifier
-   * @returns {string} Local identifier
-   */
-  getLocalIdentifier() {
-    return this.config.localIdentifier;
-  }
-
-  /**
-   * Get local identifier (alias for getLocalIdentifier)
-   * @returns {string} Local identifier
-   */
-  getLocalId() {
-    return this.config.localIdentifier;
-  }
-
-  /**
-   * Get list of local IDs that have active token mappings
-   * @returns {string[]} Array of local IDs
-   */
-  getMappedLocalIds() {
-    return Array.from(this.localIdToTokenMap.keys());
-  }
-
-  /**
-   * Get token for a specific local ID
-   * @param {string} localId Local identifier
-   * @returns {string|null} Token or null if not mapped
-   */
-  getTokenForLocalId(localId) {
-    return this.localIdToTokenMap.get(localId) || null;
-  }
-
-  /**
    * Get active connections
    * @returns {Map<string, Object>} Map of active connections
    */
@@ -958,9 +583,9 @@ export class WebSocketProxyClient {
   }
 
   /**
-   * Check if connected to a specific token
+   * Check if a specific token has sent us a message (is a known peer)
    * @param {string} token Token to check
-   * @returns {boolean} True if connected
+   * @returns {boolean} True if known
    */
   hasConnection(token) {
     return this.activeConnections.has(token);
@@ -973,42 +598,6 @@ export class WebSocketProxyClient {
    */
   getChannelInfo(channel) {
     return this.channelSubscriptions.get(channel) || null;
-  }
-
-  /**
-   * Get waiting handshakes
-   * @returns {Map<number, Object>} Map of waiting handshakes (messageId -> handshake data)
-   */
-  getWaitingHandshakes() {
-    return new Map(this.waitingHandshakes);
-  }
-
-  /**
-   * Cancel a waiting handshake
-   * @param {number} messageId Message ID of the handshake to cancel
-   * @returns {boolean} True if handshake was found and cancelled
-   */
-  cancelHandshake(messageId) {
-    if (this.waitingHandshakes.has(messageId)) {
-      const handshakeData = this.waitingHandshakes.get(messageId);
-      
-      // Clear timeout
-      if (handshakeData.timeout) {
-        clearTimeout(handshakeData.timeout);
-      }
-      
-      // Reject the promise if it exists
-      if (handshakeData.reject) {
-        handshakeData.reject(new Error('Handshake cancelled'));
-      }
-      
-      // Remove from waiting handshakes
-      this.waitingHandshakes.delete(messageId);
-      
-      this.emit('handshake_cancelled', { messageId, targetToken: handshakeData.targetToken });
-      return true;
-    }
-    return false;
   }
 
   // Event system methods

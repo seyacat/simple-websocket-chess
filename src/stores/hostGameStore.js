@@ -20,12 +20,17 @@ import {
   parseWebSocketMessage,
   createInitialGameState,
   createInitialSeats,
-  isValidMoveForPlayer
+  isValidMoveForPlayer,
+  createVersion
 } from './sharedGameLogic'
 
 export const useHostGameStore = defineStore('hostGame', () => {
   // Estado autoritativo del juego (source of truth)
   const gameState = ref(createInitialGameState())
+  
+  // Versioning para detección de desync en guests
+  const currentVersion = ref(createVersion(0))
+  const prevVersion = ref(createVersion(0))
   
   // Estado local del host como jugador (cuando ocupa un asiento)
   const hostAsPlayerColor = ref(null) // 'white', 'black', o null si no juega
@@ -49,10 +54,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
     return isHostPlaying.value && currentTurn.value === hostAsPlayerColor.value
   })
   
-  // Indica si la instancia del host está activa (host tiene un juego creado)
+  // Indica si la instancia del host está activa
   const hostInstanceActive = computed(() => {
-    // La instancia está activa si el host está en modo 'host'
-    // y tiene un estado de juego inicializado (no solo el estado por defecto)
     return connectionStore.isHost && gameState.value.gameStatus !== undefined
   })
   
@@ -69,7 +72,23 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   const spectatorsCount = computed(() => spectators.value.length)
   
+  // ─────────────────────────────────────────────────────────────────
+  // Versioning
+  // ─────────────────────────────────────────────────────────────────
+  
+  /**
+   * Incrementa el contador de versión antes de cada broadcast.
+   * prevVersion guarda la versión anterior para que el guest pueda
+   * detectar si se perdió algún mensaje.
+   */
+  function bumpVersion() {
+    prevVersion.value = { ...currentVersion.value }
+    currentVersion.value = { seq: currentVersion.value.seq + 1, ts: Date.now() }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // Acciones del host como servidor/autoridad
+  // ─────────────────────────────────────────────────────────────────
   
   /**
    * Inicializa un nuevo juego como host
@@ -79,11 +98,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
     hostAsPlayerColor.value = null
     hostSelectedPiece.value = null
     hostValidMoves.value = []
-    
-    // Notificar a todos los subscribers sobre el nuevo estado
-    broadcastGameUpdate(MESSAGE_TYPES.GAME_STATE_UPDATE, {
-      ...gameState.value
-    })
+    currentVersion.value = createVersion(0)
+    prevVersion.value = createVersion(0)
   }
   
   /**
@@ -95,6 +111,10 @@ export const useHostGameStore = defineStore('hostGame', () => {
     const parsed = parseWebSocketMessage(message)
     
     switch (parsed.type) {
+      case MESSAGE_TYPES.REQUEST_FULL_STATE:
+        handleFullStateRequest(guestToken)
+        break
+        
       case MESSAGE_TYPES.SEAT_REQUEST:
         handleSeatRequest(guestToken, parsed.data)
         break
@@ -121,6 +141,39 @@ export const useHostGameStore = defineStore('hostGame', () => {
   }
   
   /**
+   * Responde a un REQUEST_FULL_STATE de un guest.
+   * También registra al guest como espectador si es la primera vez que escribe.
+   * @param {string} guestToken
+   */
+  function handleFullStateRequest(guestToken) {
+    // Registrar al guest como suscriptor del host (para futuros broadcasts)
+    connectionStore.addSubscriber(guestToken)
+    
+    // Auto-registrar como espectador si no estaba en el juego todavía
+    const isInSeat = getSeatColorByToken(guestToken) !== null
+    const isSpectating = spectators.value.includes(guestToken)
+    if (!isInSeat && !isSpectating) {
+      addSpectator(guestToken, 'Guest')
+    }
+    
+    // Responder solo al guest solicitante (no broadcast)
+    const msg = formatWebSocketMessage(MESSAGE_TYPES.FULL_STATE_RESPONSE, {
+      board: gameState.value.board,
+      currentTurn: gameState.value.currentTurn,
+      gameStatus: gameState.value.gameStatus,
+      moveHistory: gameState.value.moveHistory,
+      seats: gameState.value.seats,
+      spectators: gameState.value.spectators,
+      version: currentVersion.value
+    })
+    connectionStore.sendMessage(guestToken, msg).catch(err => {
+      console.error('Error enviando FULL_STATE_RESPONSE a guest:', err)
+    })
+    
+    console.log(`[Host] FULL_STATE_RESPONSE enviado a ${guestToken} (v${currentVersion.value.seq})`)
+  }
+  
+  /**
    * Maneja una solicitud de asiento de un guest
    * @param {string} guestToken - Token del guest
    * @param {Object} data - Datos de la solicitud {color, playerToken, playerName}
@@ -131,7 +184,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
     // Validar que el asiento esté disponible
     if (seats.value[color].occupied) {
       console.log(`Asiento ${color} ya está ocupado, rechazando solicitud de ${guestToken}`)
-      // Podríamos enviar un mensaje de error al guest
       return
     }
     
@@ -149,9 +201,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
     gameState.value.seats[color].occupied = true
     gameState.value.seats[color].playerToken = playerToken
     gameState.value.seats[color].playerName = playerName || `Jugador ${color}`
-    
-    // Si el host quiere jugar, puede ocupar un asiento también
-    // (esto se maneja separadamente con occupySeatAsHost)
     
     // Broadcast actualización de asientos
     broadcastGameUpdate(MESSAGE_TYPES.SEATS_UPDATE, {
@@ -171,31 +220,25 @@ export const useHostGameStore = defineStore('hostGame', () => {
    * @param {Object} moveData - Datos del movimiento
    */
   function handleMoveRequest(guestToken, moveData) {
-    // Verificar que el guest tenga permiso para mover (esté en un asiento)
     const guestSeatColor = getSeatColorByToken(guestToken)
     if (!guestSeatColor) {
       console.log(`Guest ${guestToken} no está en un asiento, ignorando movimiento`)
       return
     }
     
-    // Verificar que sea el turno del color del guest
     if (currentTurn.value !== guestSeatColor) {
       console.log(`No es el turno de ${guestSeatColor}, ignorando movimiento`)
       return
     }
     
-    // Validar el movimiento
     const isValid = validateMove(moveData, guestSeatColor)
     if (!isValid) {
       console.log('Movimiento inválido:', moveData)
-      // Podríamos enviar un mensaje de error al guest
       return
     }
     
-    // Aplicar movimiento al estado autoritativo
     applyMove(moveData)
     
-    // Broadcast el movimiento aplicado a todos
     broadcastGameUpdate(MESSAGE_TYPES.MOVE_APPLIED, {
       move: moveData,
       newState: {
@@ -205,7 +248,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
       }
     })
     
-    // Verificar estado del juego después del movimiento
     checkGameStatus()
   }
   
@@ -217,7 +259,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
   function handleLeaveSeat(guestToken, data) {
     const { color } = data
     
-    // Verificar que el guest realmente ocupa ese asiento
     if (seats.value[color].playerToken !== guestToken) {
       console.log(`Guest ${guestToken} no ocupa el asiento ${color}`)
       return
@@ -235,7 +276,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
     const guestSeatColor = getSeatColorByToken(guestToken)
     if (!guestSeatColor) return
     
-    // Terminar juego con el oponente como ganador
     const winner = guestSeatColor === SEAT_COLORS.WHITE ? SEAT_COLORS.BLACK : SEAT_COLORS.WHITE
     endGame(winner, 'surrender')
   }
@@ -246,7 +286,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
    * @param {Object} data - Datos del mensaje de chat
    */
   function handleChatMessage(guestToken, data) {
-    // Reenviar el mensaje de chat a todos (incluyendo al remitente)
     broadcastGameUpdate(MESSAGE_TYPES.CHAT_MESSAGE, {
       ...data,
       playerToken: guestToken,
@@ -256,34 +295,26 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   /**
    * Valida un movimiento
-   * @param {Object} moveData - Datos del movimiento
-   * @param {string} playerColor - Color del jugador que hace el movimiento
-   * @returns {boolean} true si el movimiento es válido
    */
   function validateMove(moveData, playerColor) {
     const { from, to, piece } = moveData
     
-    // Verificar que la pieza sea del color correcto
     if (!isValidMoveForPlayer(board.value, from, to, piece, playerColor)) {
       return false
     }
     
-    // Verificar movimiento usando las reglas de ajedrez
     return isValidMove(board.value, from.row, from.col, to.row, to.col, piece)
   }
   
   /**
    * Aplica un movimiento validado al estado autoritativo
-   * @param {Object} moveData - Datos del movimiento
    */
   function applyMove(moveData) {
     const { from, to, piece } = moveData
     
-    // Aplicar movimiento al tablero
     const newBoard = applyMoveToBoard(board.value, from.row, from.col, to.row, to.col, piece)
     gameState.value.board = newBoard
     
-    // Registrar en historial
     const capturedPiece = moveData.captured || ''
     const moveNotation = getAlgebraicNotation(from.row, from.col, to.row, to.col, capturedPiece)
     gameState.value.moveHistory.push({
@@ -292,32 +323,26 @@ export const useHostGameStore = defineStore('hostGame', () => {
       turn: currentTurn.value
     })
     
-    // Cambiar turno
     gameState.value.currentTurn = currentTurn.value === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE
   }
   
   /**
    * Libera un asiento
-   * @param {string} color - Color del asiento
-   * @param {string} playerToken - Token del jugador que libera el asiento
    */
   function vacateSeat(color, playerToken) {
     if (!seats.value[color].occupied || seats.value[color].playerToken !== playerToken) {
       return
     }
     
-    // Liberar asiento
     gameState.value.seats[color].occupied = false
     const playerName = gameState.value.seats[color].playerName
     gameState.value.seats[color].playerToken = null
     gameState.value.seats[color].playerName = null
     
-    // Agregar a espectadores si no es el host
     if (playerToken !== connectionStore.token) {
       addSpectator(playerToken, playerName || `Ex-${color}`)
     }
     
-    // Pausar juego si solo queda un jugador
     if (gameStatus.value === GAME_STATUS.PLAYING || gameStatus.value === GAME_STATUS.CHECK) {
       const occupiedCount = (seats.value.white.occupied ? 1 : 0) + (seats.value.black.occupied ? 1 : 0)
       if (occupiedCount === 1) {
@@ -325,7 +350,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
       }
     }
     
-    // Broadcast actualización
     broadcastGameUpdate(MESSAGE_TYPES.SEATS_UPDATE, {
       seats: gameState.value.seats,
       changedColor: color,
@@ -333,7 +357,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
       action: 'vacated'
     })
     
-    // Si el host libera su asiento, actualizar estado local
     if (playerToken === connectionStore.token && hostAsPlayerColor.value === color) {
       hostAsPlayerColor.value = null
       hostSelectedPiece.value = null
@@ -343,8 +366,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   /**
    * Añade un espectador
-   * @param {string} token - Token del espectador
-   * @param {string} playerName - Nombre del espectador
    */
   function addSpectator(token, playerName = null) {
     if (!spectators.value.includes(token)) {
@@ -359,7 +380,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   /**
    * Remueve un espectador
-   * @param {string} token - Token del espectador
    */
   function removeSpectator(token) {
     const index = spectators.value.indexOf(token)
@@ -388,15 +408,13 @@ export const useHostGameStore = defineStore('hostGame', () => {
       gameState.value.gameStatus = GAME_STATUS.CHECK
     } else if (gameState.value.gameStatus === GAME_STATUS.WAITING) {
       gameState.value.gameStatus = GAME_STATUS.PLAYING
-    } else if (gameState.value.gameStatus === GAME_STATUS.CHECK || 
+    } else if (gameState.value.gameStatus === GAME_STATUS.CHECK ||
                gameState.value.gameStatus === GAME_STATUS.PLAYING) {
-      // Si estaba en jaque pero ya no lo está, volver a 'playing'
       if (!isKingInCheck(board.value, currentColor)) {
         gameState.value.gameStatus = GAME_STATUS.PLAYING
       }
     }
     
-    // Broadcast actualización de estado si cambió
     if (gameState.value.gameStatus === GAME_STATUS.CHECK ||
         gameState.value.gameStatus === GAME_STATUS.CHECKMATE ||
         gameState.value.gameStatus === GAME_STATUS.STALEMATE) {
@@ -413,7 +431,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
     if (bothSeatsOccupied.value && gameStatus.value === GAME_STATUS.WAITING) {
       startGame()
     } else if (bothSeatsOccupied.value && gameStatus.value === GAME_STATUS.PAUSED) {
-      // Reanudar juego pausado
       gameState.value.gameStatus = GAME_STATUS.PLAYING
       broadcastGameUpdate(MESSAGE_TYPES.GAME_START_AUTO, {
         timestamp: Date.now(),
@@ -430,7 +447,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
     gameState.value.gameStatus = GAME_STATUS.PLAYING
     gameState.value.currentTurn = COLORS.WHITE
     
-    // Resetear tablero si es un nuevo juego (sin movimientos)
     if (moveHistory.value.length === 0) {
       const initialGameState = createInitialGameState()
       gameState.value.board = initialGameState.board
@@ -445,8 +461,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   /**
    * Termina el juego
-   * @param {string|null} winner - Color del ganador (null para empate)
-   * @param {string} reason - Razón del fin ('checkmate', 'stalemate', 'surrender', etc.)
    */
   function endGame(winner, reason) {
     gameState.value.gameStatus = GAME_STATUS.FINISHED
@@ -459,7 +473,9 @@ export const useHostGameStore = defineStore('hostGame', () => {
   }
   
   /**
-   * Envía una actualización de juego a todos los subscribers
+   * Envía una actualización de juego a todos los subscribers.
+   * Incrementa la versión antes de cada broadcast para que los guests
+   * puedan detectar mensajes perdidos (desync).
    * @param {string} type - Tipo de mensaje
    * @param {Object} data - Datos de la actualización
    */
@@ -468,14 +484,18 @@ export const useHostGameStore = defineStore('hostGame', () => {
       return
     }
     
-    const message = formatWebSocketMessage(type, data)
+    bumpVersion()
+    
+    const message = formatWebSocketMessage(type, {
+      ...data,
+      version: currentVersion.value,
+      prevVersion: prevVersion.value
+    })
     connectionStore.broadcastToSubscribers(message)
   }
   
   /**
    * Obtiene el color del asiento ocupado por un token
-   * @param {string} token - Token del jugador
-   * @returns {string|null} 'white', 'black', o null
    */
   function getSeatColorByToken(token) {
     if (seats.value.white.playerToken === token) return SEAT_COLORS.WHITE
@@ -483,12 +503,12 @@ export const useHostGameStore = defineStore('hostGame', () => {
     return null
   }
   
+  // ─────────────────────────────────────────────────────────────────
   // Acciones del host como jugador (cuando ocupa un asiento)
+  // ─────────────────────────────────────────────────────────────────
   
   /**
    * El host ocupa un asiento para jugar
-   * @param {string} color - Color del asiento a ocupar
-   * @returns {boolean} true si el asiento fue ocupado exitosamente
    */
   function occupySeatAsHost(color) {
     if (seats.value[color].occupied) {
@@ -496,18 +516,15 @@ export const useHostGameStore = defineStore('hostGame', () => {
       return false
     }
     
-    // Si ya está en otro asiento, liberarlo primero
     if (hostAsPlayerColor.value) {
       vacateSeat(hostAsPlayerColor.value, connectionStore.token)
     }
     
-    // Ocupar asiento
     gameState.value.seats[color].occupied = true
     gameState.value.seats[color].playerToken = connectionStore.token
     gameState.value.seats[color].playerName = `Host (${color})`
     hostAsPlayerColor.value = color
     
-    // Broadcast actualización
     broadcastGameUpdate(MESSAGE_TYPES.SEATS_UPDATE, {
       seats: gameState.value.seats,
       changedColor: color,
@@ -515,7 +532,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
       playerName: `Host (${color})`
     })
     
-    // Verificar si el juego debe comenzar
     checkAndStartGame()
     
     return true
@@ -523,7 +539,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   /**
    * El host selecciona una pieza (cuando juega)
-   * @param {Object} position - {row: number, col: number}
    */
   function selectPieceAsHost(position) {
     if (!isHostPlaying.value || !isHostTurn.value) {
@@ -537,7 +552,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
     const { row, col } = position
     const piece = board.value[row][col]
     
-    // Verificar que la pieza sea del color del host
     if (!piece || (hostAsPlayerColor.value === COLORS.WHITE && piece === piece.toLowerCase()) ||
         (hostAsPlayerColor.value === COLORS.BLACK && piece === piece.toUpperCase())) {
       hostSelectedPiece.value = null
@@ -551,8 +565,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   /**
    * El host realiza un movimiento (cuando juega)
-   * @param {Object} toPosition - Posición de destino {row: number, col: number}
-   * @returns {boolean} true si el movimiento fue realizado
    */
   function makeMoveAsHost(toPosition) {
     if (!isHostPlaying.value || !isHostTurn.value || !hostSelectedPiece.value) {
@@ -562,12 +574,11 @@ export const useHostGameStore = defineStore('hostGame', () => {
     const { row: fromRow, col: fromCol } = hostSelectedPiece.value
     const { row: toRow, col: toCol } = toPosition
     
-    // Verificar que el movimiento sea válido
-    const isValidMove = hostValidMoves.value.some(move =>
+    const isValidMoveCheck = hostValidMoves.value.some(move =>
       move.row === toRow && move.col === toCol
     )
     
-    if (!isValidMove) {
+    if (!isValidMoveCheck) {
       console.log('Movimiento inválido del host')
       return false
     }
@@ -582,17 +593,14 @@ export const useHostGameStore = defineStore('hostGame', () => {
       playerToken: connectionStore.token
     }
     
-    // Validar y aplicar el movimiento (como lo haría con cualquier jugador)
     const isValid = validateMove(moveData, hostAsPlayerColor.value)
     if (!isValid) {
       console.log('Movimiento del host no válido según reglas')
       return false
     }
     
-    // Aplicar movimiento al estado autoritativo
     applyMove(moveData)
     
-    // Broadcast el movimiento aplicado a todos
     broadcastGameUpdate(MESSAGE_TYPES.MOVE_APPLIED, {
       move: moveData,
       newState: {
@@ -602,11 +610,9 @@ export const useHostGameStore = defineStore('hostGame', () => {
       }
     })
     
-    // Limpiar selección del host
     hostSelectedPiece.value = null
     hostValidMoves.value = []
     
-    // Verificar estado del juego
     checkGameStatus()
     
     return true
@@ -631,31 +637,28 @@ export const useHostGameStore = defineStore('hostGame', () => {
   
   /**
    * Destruye la instancia del host, notificando a todos los guests
-   * y limpiando el estado local
    */
   function destroyHostInstance() {
-    // Notificar a todos los guests que el host está cerrando el juego
     broadcastGameUpdate(MESSAGE_TYPES.GAME_END, {
       reason: 'host_closed_game',
       message: 'El host ha cerrado el juego'
     })
     
-    // Limpiar estado local del juego
     gameState.value = createInitialGameState()
     hostAsPlayerColor.value = null
     hostSelectedPiece.value = null
     hostValidMoves.value = []
-    
-    // Limpiar lista de espectadores
     gameState.value.spectators = []
-    
-    // Notificar al servidor que el host está cambiando de modo
-    // (esto se manejará en App.vue llamando a setMode(null))
+    currentVersion.value = createVersion(0)
+    prevVersion.value = createVersion(0)
     
     console.log('Instancia del host destruida')
   }
   
-  // Inicializar WebSocket listeners para mensajes directos de guests
+  // ─────────────────────────────────────────────────────────────────
+  // WebSocket listeners
+  // ─────────────────────────────────────────────────────────────────
+  
   let wsListenersInitialized = false
   function initWebSocketListeners() {
     if (wsListenersInitialized) return
@@ -667,52 +670,33 @@ export const useHostGameStore = defineStore('hostGame', () => {
       return
     }
     
-    // Handler para mensajes directos de guests
+    // Handler para mensajes directos de guests (incluyendo REQUEST_FULL_STATE)
     proxyClient.on('message', (fromToken, message, timestamp, parsedMessage) => {
-      // Solo procesar si somos host
       if (!connectionStore.isHost) return
       
-      // El mensaje viene con 'fromToken' y 'message'
+      // Solo manejar mensajes en formato de juego (TYPE|JSON), no JSON puro
+      if (parsedMessage) return  // mensajes JSON puro no son del protocolo de juego
+      
       handleGuestMessage(fromToken, message)
     })
     
-    // Handler para nuevos guests conectados (evento paired)
-    proxyClient.on('paired', (pairedToken) => {
-      if (!connectionStore.isHost) return
-      
-      // Agregar como espectador
-      addSpectator(pairedToken, `Guest`)
-      
-      // Enviar estado completo del juego al nuevo guest para que sincronice
-      const fullStateMsg = formatWebSocketMessage(MESSAGE_TYPES.GAME_STATE_UPDATE, {
-        board: gameState.value.board,
-        currentTurn: gameState.value.currentTurn,
-        gameStatus: gameState.value.gameStatus,
-        moveHistory: gameState.value.moveHistory,
-        seats: gameState.value.seats,
-        spectators: gameState.value.spectators
-      })
-      connectionStore.sendMessage(pairedToken, fullStateMsg).catch(err => {
-        console.error('Error enviando estado inicial a guest:', err)
-      })
-    })
-    
-    // Handler para guests desconectados (evento unpaired)
+    // Handler para guests desconectados
     proxyClient.on('unpaired', (unpairedToken, timestamp) => {
       if (!connectionStore.isHost) return
       
-      // Verificar si el guest estaba en un asiento
       const seatColor = getSeatColorByToken(unpairedToken)
       if (seatColor) {
         vacateSeat(seatColor, unpairedToken)
       } else {
         removeSpectator(unpairedToken)
       }
+      
+      // También remover de la lista de subscribers del connectionStore
+      connectionStore.removeSubscriber(unpairedToken)
     })
   }
   
   // Inicializar al crear el store
-  initializeGameAsHost()
   initWebSocketListeners()
   
   return {

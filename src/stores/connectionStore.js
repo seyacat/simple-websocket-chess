@@ -236,18 +236,12 @@ export const useConnectionStore = defineStore('connection', () => {
       return false
     }
     
-    try {
-      // Iniciar handshake con el host
-      const messageId = await wsProxyClient.initiateHandshake(hostToken, 30000)
-      console.log(`Handshake iniciado con host ${hostToken}, messageId: ${messageId}`)
-      
-      // El evento 'paired' se manejará en setupProxyEventHandlers
-      return true
-    } catch (error) {
-      console.error('Error suscribiéndose a host:', error)
-      setError('Error suscribiéndose: ' + (error.message || 'Desconocido'))
-      return false
-    }
+    // Setear el host directamente — el playerGameStore se encarga de
+    // enviar REQUEST_FULL_STATE como primer mensaje
+    setSubscribedHost(hostToken)
+    
+    console.log(`[Guest] Suscrito al host ${hostToken}. Solicitando estado completo...`)
+    return true
   }
 
   const unsubscribe = async () => {
@@ -333,44 +327,6 @@ export const useConnectionStore = defineStore('connection', () => {
     wsProxyClient.on('message', (fromToken, message, timestamp, parsedMessage) => {
       // Los mensajes específicos del juego son manejados por los stores de juego
       // Este store no necesita loguear cada mensaje
-    })
-    
-    // Handshake request (para hosts)
-    wsProxyClient.on('handshake_request', (data) => {
-      console.log('Solicitud de handshake recibida:', data)
-      
-      if (isHost.value) {
-        // Auto-aceptar handshake de guests
-        wsProxyClient.respondToHandshake(data, 'handshake_accepted')
-        console.log('Handshake aceptado automáticamente para guest:', data.from)
-      }
-    })
-    
-    // Paired (handshake completado)
-    wsProxyClient.on('paired', (pairedToken) => {
-      console.log('Conectado con:', pairedToken)
-      
-      if (isGuest.value && !subscribedHost.value) {
-        // Guest: handshake completado con host
-        setSubscribedHost(pairedToken)
-      } else if (isHost.value) {
-        // Host: nuevo guest conectado
-        addSubscriber(pairedToken)
-      }
-    })
-    
-    // Unpaired (desconexión)
-    wsProxyClient.on('unpaired', (unpairedToken, timestamp) => {
-      console.log('Desconectado de:', unpairedToken)
-      
-      if (isGuest.value && subscribedHost.value === unpairedToken) {
-        // Guest: host desconectado
-        setSubscribedHost(null)
-        setError('Host desconectado')
-      } else if (isHost.value) {
-        // Host: guest desconectado
-        removeSubscriber(unpairedToken)
-      }
     })
     
     // Channel updated (lista de hosts públicos)

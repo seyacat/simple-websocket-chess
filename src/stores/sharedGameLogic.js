@@ -45,6 +45,8 @@ export const MESSAGE_TYPES = {
   LEAVE_SEAT: 'LEAVE_SEAT',
   CHAT_MESSAGE: 'CHAT_MESSAGE',
   SURRENDER: 'SURRENDER',
+  // Solicitud de estado completo (guest → host, cuando se conecta o detecta desync)
+  REQUEST_FULL_STATE: 'REQUEST_FULL_STATE',
   
   // Mensajes de host a players (broadcast)
   GAME_STATE_UPDATE: 'GAME_STATE_UPDATE',
@@ -57,7 +59,9 @@ export const MESSAGE_TYPES = {
   SPECTATOR_JOINED: 'SPECTATOR_JOINED',
   SPECTATOR_LEFT: 'SPECTATOR_LEFT',
   SEAT_OCCUPIED: 'SEAT_OCCUPIED',
-  SEAT_VACATED: 'SEAT_VACATED'
+  SEAT_VACATED: 'SEAT_VACATED',
+  // Respuesta al REQUEST_FULL_STATE (host → guest solicitante, no broadcast)
+  FULL_STATE_RESPONSE: 'FULL_STATE_RESPONSE'
 }
 
 // Estados posibles del juego
@@ -133,6 +137,16 @@ export function getAlgebraicNotation(fromRow, fromCol, toRow, toCol, capturedPie
   const toRank = ranks[toRow]
   
   return `${fromFile}${fromRank}${capturedPiece ? 'x' : ''}${toFile}${toRank}`
+}
+
+/**
+ * Crea un objeto de versión de estado con un contador de secuencia y timestamp.
+ * Usado para detectar desync entre host y guests.
+ * @param {number} seq - Número de secuencia (default 0)
+ * @returns {{ seq: number, ts: number }}
+ */
+export function createVersion(seq = 0) {
+  return { seq, ts: Date.now() }
 }
 
 /**
