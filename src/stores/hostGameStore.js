@@ -313,7 +313,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     gameState.value.seats[color].playerName = null
     
     // Agregar a espectadores si no es el host
-    if (playerToken !== connectionStore.uuid) {
+    if (playerToken !== connectionStore.token) {
       addSpectator(playerToken, playerName || `Ex-${color}`)
     }
     
@@ -334,7 +334,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     })
     
     // Si el host libera su asiento, actualizar estado local
-    if (playerToken === connectionStore.uuid && hostAsPlayerColor.value === color) {
+    if (playerToken === connectionStore.token && hostAsPlayerColor.value === color) {
       hostAsPlayerColor.value = null
       hostSelectedPiece.value = null
       hostValidMoves.value = []
@@ -502,12 +502,12 @@ export const useHostGameStore = defineStore('hostGame', () => {
     
     // Si ya está en otro asiento, liberarlo primero
     if (hostAsPlayerColor.value) {
-      vacateSeat(hostAsPlayerColor.value, connectionStore.uuid)
+      vacateSeat(hostAsPlayerColor.value, connectionStore.token)
     }
     
     // Ocupar asiento
     gameState.value.seats[color].occupied = true
-    gameState.value.seats[color].playerToken = connectionStore.uuid
+    gameState.value.seats[color].playerToken = connectionStore.token
     gameState.value.seats[color].playerName = `Host (${color})`
     hostAsPlayerColor.value = color
     
@@ -515,7 +515,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     broadcastGameUpdate(MESSAGE_TYPES.SEATS_UPDATE, {
       seats: gameState.value.seats,
       changedColor: color,
-      playerToken: connectionStore.uuid,
+      playerToken: connectionStore.token,
       playerName: `Host (${color})`
     })
     
@@ -583,7 +583,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
       piece,
       captured: board.value[toRow][toCol],
       timestamp: Date.now(),
-      playerToken: connectionStore.uuid
+      playerToken: connectionStore.token
     }
     
     // Validar y aplicar el movimiento (como lo haría con cualquier jugador)
@@ -622,7 +622,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
   function leaveSeatAsHost() {
     if (!isHostPlaying.value) return false
     
-    vacateSeat(hostAsPlayerColor.value, connectionStore.uuid)
+    vacateSeat(hostAsPlayerColor.value, connectionStore.token)
     return true
   }
   

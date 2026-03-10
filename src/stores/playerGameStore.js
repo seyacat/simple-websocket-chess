@@ -77,18 +77,18 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   })
   
   const isSeated = computed(() => {
-    return seats.value.white.playerToken === connectionStore.uuid ||
-           seats.value.black.playerToken === connectionStore.uuid
+    return seats.value.white.playerToken === connectionStore.token ||
+           seats.value.black.playerToken === connectionStore.token
   })
   
   const mySeatColor = computed(() => {
-    if (seats.value.white.playerToken === connectionStore.uuid) return SEAT_COLORS.WHITE
-    if (seats.value.black.playerToken === connectionStore.uuid) return SEAT_COLORS.BLACK
+    if (seats.value.white.playerToken === connectionStore.token) return SEAT_COLORS.WHITE
+    if (seats.value.black.playerToken === connectionStore.token) return SEAT_COLORS.BLACK
     return null
   })
   
   const isSpectator = computed(() => {
-    return !isSeated.value && spectators.value.includes(connectionStore.uuid)
+    return !isSeated.value && spectators.value.includes(connectionStore.token)
   })
   
   // Indica si el host al que estamos suscritos tiene una instancia activa
@@ -189,7 +189,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
       piece,
       captured: capturedPiece,
       timestamp: Date.now(),
-      playerToken: connectionStore.uuid
+      playerToken: connectionStore.token
     }
     
     // Enviar movimiento al host para validación
@@ -291,8 +291,8 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     
     const seatRequestData = {
       color,
-      playerToken: connectionStore.uuid,
-      playerName: connectionStore.shortToken || `Jugador ${color}`,
+      playerToken: connectionStore.token,
+      playerName: connectionStore.token || `Jugador ${color}`,
       timestamp: Date.now()
     }
     
@@ -319,7 +319,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     
     const leaveSeatData = {
       color: mySeatColor.value,
-      playerToken: connectionStore.uuid,
+      playerToken: connectionStore.token,
       timestamp: Date.now()
     }
     
@@ -398,8 +398,8 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     }
     
     // Actualizar playerColor si soy yo quien ocupó/liberó el asiento
-    if (seatsUpdate.changedColor && seatsUpdate.playerToken === connectionStore.uuid) {
-      if (seats.value[seatsUpdate.changedColor].playerToken === connectionStore.uuid) {
+    if (seatsUpdate.changedColor && seatsUpdate.playerToken === connectionStore.token) {
+      if (seats.value[seatsUpdate.changedColor].playerToken === connectionStore.token) {
         playerColor.value = seatsUpdate.changedColor
       } else if (mySeatColor.value === seatsUpdate.changedColor) {
         // Liberamos nuestro asiento
@@ -417,7 +417,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     currentTurn.value = COLORS.WHITE
     
     // Si se especifica color para este jugador
-    if (gameStartData.color && gameStartData.playerToken === connectionStore.uuid) {
+    if (gameStartData.color && gameStartData.playerToken === connectionStore.token) {
       playerColor.value = gameStartData.color
     }
   }
@@ -476,7 +476,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     if (!connectionStore.subscribedHost) return
     
     const surrenderData = {
-      playerToken: connectionStore.uuid,
+      playerToken: connectionStore.token,
       timestamp: Date.now()
     }
     
