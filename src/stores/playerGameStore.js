@@ -294,8 +294,10 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
         break
         
       case MESSAGE_TYPES.MOVE_APPLIED:
-        if (data.newState && data.newState.timers) {
-          timers.value = data.newState.timers
+        if (data.newState) {
+          if (data.newState.timers) timers.value = data.newState.timers
+          if (data.newState.currentTurn) currentTurn.value = data.newState.currentTurn
+          if (data.newState.gameStatus) gameStatus.value = data.newState.gameStatus
         }
         applyMoveFromHost(data.move)
         break
@@ -364,8 +366,6 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
       turn: currentTurn.value,
       isRemote: true
     })
-    
-    currentTurn.value = currentTurn.value === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE
     
     if (selectedPiece.value &&
         selectedPiece.value.row === from.row &&

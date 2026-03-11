@@ -625,7 +625,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
       newState: {
         board: gameState.value.board,
         currentTurn: gameState.value.currentTurn,
-        gameStatus: gameState.value.gameStatus
+        gameStatus: gameState.value.gameStatus,
+        timers: gameState.value.timers
       }
     })
     
