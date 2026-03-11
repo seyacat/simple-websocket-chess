@@ -419,10 +419,11 @@ function createBoard() {
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
       const visualRow = isFlipped.value ? 7 - row : row
-      const x = margin + col * squareSize + squareSize / 2
+      const visualCol = isFlipped.value ? 7 - col : col
+      const x = margin + visualCol * squareSize + squareSize / 2
       const y = margin + visualRow * squareSize + squareSize / 2
       
-      const isWhite = (visualRow + col) % 2 === 0
+      const isWhite = (row + col) % 2 === 0
       const square = this.add.image(x, y, isWhite ? 'white-square' : 'black-square')
         .setDisplaySize(squareSize, squareSize)
         .setInteractive()
@@ -478,8 +479,9 @@ function updateBoardInPhaser(newBoard) {
     
     // Columnas (A-H)
     const col = i
-    const fileText = isFlipped.value ? String.fromCharCode(72 - col) : String.fromCharCode(65 + col)
-    const centerX = margin + col * squareSize + squareSize / 2
+    const visualCol = isFlipped.value ? 7 - col : col
+    const fileText = String.fromCharCode(65 + col)
+    const centerX = margin + visualCol * squareSize + squareSize / 2
     
     // Arriba (visualRow 0) franja
     const tTop = scene.add.text(centerX, margin / 2, fileText, textStyle).setOrigin(0.5).setDepth(1)
@@ -496,7 +498,8 @@ function updateBoardInPhaser(newBoard) {
       if (!piece) continue
       
       const visualRow = isFlipped.value ? 7 - row : row
-      const x = margin + col * squareSize + squareSize / 2
+      const visualCol = isFlipped.value ? 7 - col : col
+      const x = margin + visualCol * squareSize + squareSize / 2
       const y = margin + visualRow * squareSize + squareSize / 2
       
       const pieceText = scene.add.text(x, y, getPieceSymbol(piece), {
@@ -549,16 +552,19 @@ function updateBoardInPhaser(newBoard) {
     
     scene.input.on('dragend', function (pointer, gameObject) {
        // Calculate target squares based on pointer coordinates
-       const targetCol = Math.floor((pointer.x - margin) / squareSize)
+       let targetVisualCol = Math.floor((pointer.x - margin) / squareSize)
        let targetVisualRow = Math.floor((pointer.y - margin) / squareSize)
+       
+       const targetCol = isFlipped.value ? 7 - targetVisualCol : targetVisualCol
        const targetRow = isFlipped.value ? 7 - targetVisualRow : targetVisualRow
        
        const originalCol = gameObject.originalCol
        const originalRow = gameObject.originalRow
+       const originalVisualCol = isFlipped.value ? 7 - originalCol : originalCol
        const originalVisualRow = isFlipped.value ? 7 - originalRow : originalRow
        
        // Snap back visually immediately
-       gameObject.x = margin + originalCol * squareSize + squareSize / 2
+       gameObject.x = margin + originalVisualCol * squareSize + squareSize / 2
        gameObject.y = margin + originalVisualRow * squareSize + squareSize / 2
        
        // If dropped on a valid different square, trigger click there to execute move
@@ -597,7 +603,8 @@ function highlightValidMoves(moves, squareSize, margin) {
    if (selectedPiece.value) {
       const g = scene.add.graphics()
       g.lineStyle(4, 0x00FF00, 1) // Outline verde brillante
-      const px = margin + selectedPiece.value.col * squareSize
+      const visualCol = isFlipped.value ? 7 - selectedPiece.value.col : selectedPiece.value.col
+      const px = margin + visualCol * squareSize
       const visualRow = isFlipped.value ? 7 - selectedPiece.value.row : selectedPiece.value.row
       const py = margin + visualRow * squareSize
       g.strokeRect(px, py, squareSize, squareSize)
@@ -607,8 +614,9 @@ function highlightValidMoves(moves, squareSize, margin) {
    if (moves && moves.length > 0) {
       moves.forEach(move => {
          const targetVisualRow = isFlipped.value ? 7 - move.row : move.row
-        const dotX = margin + move.col * squareSize + squareSize / 2
-        const dotY = margin + targetVisualRow * squareSize + squareSize / 2
+         const targetVisualCol = isFlipped.value ? 7 - move.col : move.col
+         const dotX = margin + targetVisualCol * squareSize + squareSize / 2
+         const dotY = margin + targetVisualRow * squareSize + squareSize / 2
          
          const dot = scene.add.circle(dotX, dotY, squareSize * 0.15, 0x000000, 0.3)
          scene.highlightGroup.add(dot)
