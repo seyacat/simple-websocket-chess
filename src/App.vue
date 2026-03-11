@@ -330,7 +330,7 @@ onMounted(() => {
                     class="history-item"
                   >
                     <span class="move-number">{{ gameStore.moveHistory.length - index }}.</span>
-                    <span class="move-description">{{ move.description }}</span>
+                    <span class="move-description">{{ move.notation }}</span>
                   </div>
                   <div v-if="gameStore.moveHistory.length === 0" class="no-moves">
                     No hay movimientos aún

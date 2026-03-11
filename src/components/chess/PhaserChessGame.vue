@@ -514,7 +514,7 @@ function updateBoardInPhaser(newBoard) {
       
       // Setup drag and drop for pieces of the player's color
       const pColor = mySeatColor.value
-      const isPickable = piece && isSeated.value && gameStatus.value === 'playing' && (
+      const isPickable = piece && isSeated.value && (gameStatus.value === 'playing' || gameStatus.value === 'check') && (
         (pColor === 'white' && piece === piece.toUpperCase()) ||
         (pColor === 'black' && piece === piece.toLowerCase())
       )

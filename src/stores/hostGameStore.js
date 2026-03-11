@@ -324,18 +324,20 @@ export const useHostGameStore = defineStore('hostGame', () => {
     }
     gameState.value.timers.lastUpdate = now
     
+    const oldBoard = board.value.map(row => [...row])
     const newBoard = applyMoveToBoard(board.value, from.row, from.col, to.row, to.col, piece)
     gameState.value.board = newBoard
     
-    const capturedPiece = moveData.captured || ''
-    const moveNotation = getAlgebraicNotation(from.row, from.col, to.row, to.col, capturedPiece)
+    const moveNotation = getAlgebraicNotation(moveData, oldBoard, newBoard)
     gameState.value.moveHistory.push({
       ...moveData,
       notation: moveNotation,
       turn: currentTurn.value
     })
     
-    console.log('[Host] Historial de movimientos:', JSON.parse(JSON.stringify(gameState.value.moveHistory)))
+    console.log('[Host] Historial de movimientos (Objetos):', JSON.parse(JSON.stringify(gameState.value.moveHistory)))
+    const notations = gameState.value.moveHistory.map(m => m.notation)
+    console.log('[Host] Historial de movimientos (Notación):', notations)
     
     gameState.value.currentTurn = currentTurn.value === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE
   }

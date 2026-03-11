@@ -355,20 +355,21 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   function applyMoveFromHost(moveData) {
     const { from, to, piece } = moveData
     
-    // Usar el motor para aplicar el movimiento (así captura reglas secundarias como el enroque)
+    const oldBoard = board.value.map(row => [...row])
     board.value = applyMove(board.value, from.row, from.col, to.row, to.col)
     
-    const capturedPiece = moveData.captured || ''
-    const moveNotation = getAlgebraicNotation(from.row, from.col, to.row, to.col, capturedPiece)
+    const moveNotation = getAlgebraicNotation(moveData, oldBoard, board.value)
     moveHistory.value.push({
       from, to, piece,
-      captured: capturedPiece,
+      captured: moveData.captured || '',
       notation: moveNotation,
       turn: currentTurn.value,
       isRemote: true
     })
     
-    console.log('[Guest] Historial de movimientos:', JSON.parse(JSON.stringify(moveHistory.value)))
+    console.log('[Guest] Historial de movimientos (Objetos):', JSON.parse(JSON.stringify(moveHistory.value)))
+    const notations = moveHistory.value.map(m => m.notation)
+    console.log('[Guest] Historial de movimientos (Notación):', notations)
     
     if (selectedPiece.value &&
         selectedPiece.value.row === from.row &&

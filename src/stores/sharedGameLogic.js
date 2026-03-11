@@ -119,25 +119,80 @@ export const SEAT_COLORS = {
 
 // Funciones de utilidad compartidas
 
-/**
- * Convierte coordenadas de fila/columna a notación algebraica
- * @param {number} fromRow - Fila de origen (0-7)
- * @param {number} fromCol - Columna de origen (0-7)
- * @param {number} toRow - Fila de destino (0-7)
- * @param {number} toCol - Columna de destino (0-7)
- * @param {string} capturedPiece - Pieza capturada (vacío si no hay captura)
- * @returns {string} Notación algebraica (ej. "e2e4", "e7e5", "e4xd5")
- */
-export function getAlgebraicNotation(fromRow, fromCol, toRow, toCol, capturedPiece = '') {
+export function getAlgebraicNotation(moveData, boardBefore = null, boardAfter = null) {
+  const { from, to, piece, captured } = moveData
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
   const ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
   
-  const fromFile = files[fromCol]
-  const fromRank = ranks[fromRow]
-  const toFile = files[toCol]
-  const toRank = ranks[toRow]
+  const fromFile = files[from.col]
+  const fromRank = ranks[from.row]
+  const toFile = files[to.col]
+  const toRank = ranks[to.row]
   
-  return `${fromFile}${fromRank}${capturedPiece ? 'x' : ''}${toFile}${toRank}`
+  // Castling
+  if (piece.toLowerCase() === 'k' && Math.abs(to.col - from.col) === 2) {
+    if (to.col > from.col) return 'O-O'
+    return 'O-O-O'
+  }
+  
+  let notation = ''
+  
+  // Piece
+  if (piece.toLowerCase() !== 'p') {
+    notation += piece.toUpperCase()
+    
+    // Disambiguation
+    if (boardBefore) {
+      const samePieces = []
+      const pColor = piece === piece.toUpperCase() ? COLORS.WHITE : COLORS.BLACK
+      
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (r === from.row && c === from.col) continue
+          if (boardBefore[r][c] === piece) {
+             if (isValidMoveForPlayer(boardBefore, {row: r, col: c}, to, piece, pColor)) {
+               samePieces.push({row: r, col: c})
+             }
+          }
+        }
+      }
+      
+      if (samePieces.length > 0) {
+        const sameFile = samePieces.some(p => p.col === from.col)
+        const sameRank = samePieces.some(p => p.row === from.row)
+        
+        if (!sameFile) {
+          notation += fromFile
+        } else if (!sameRank) {
+          notation += fromRank
+        } else {
+          notation += fromFile + fromRank
+        }
+      }
+    }
+  } else {
+    // Pawn
+    if (captured) {
+      notation += fromFile
+    }
+  }
+  
+  if (captured) notation += 'x'
+  notation += toFile + toRank
+  
+  // Check/Checkmate
+  if (boardAfter) {
+     const pColor = piece === piece.toUpperCase() ? COLORS.WHITE : COLORS.BLACK
+     const oppColor = pColor === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE
+     
+     if (isCheckmate(boardAfter, oppColor)) {
+       notation += '#'
+     } else if (isKingInCheck(boardAfter, oppColor)) {
+       notation += '+'
+     }
+  }
+  
+  return notation
 }
 
 /**
