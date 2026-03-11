@@ -242,6 +242,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
     
     applyMove(moveData)
     
+    checkGameStatus()
+    
     broadcastGameUpdate(MESSAGE_TYPES.MOVE_APPLIED, {
       move: moveData,
       newState: {
@@ -251,8 +253,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
         timers: gameState.value.timers
       }
     })
-    
-    checkGameStatus()
   }
   
   /**
@@ -334,6 +334,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
       notation: moveNotation,
       turn: currentTurn.value
     })
+    
+    console.log('[Host] Historial de movimientos:', JSON.parse(JSON.stringify(gameState.value.moveHistory)))
     
     gameState.value.currentTurn = currentTurn.value === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE
   }
@@ -620,6 +622,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
     
     applyMove(moveData)
     
+    checkGameStatus()
+    
     broadcastGameUpdate(MESSAGE_TYPES.MOVE_APPLIED, {
       move: moveData,
       newState: {
@@ -632,8 +636,6 @@ export const useHostGameStore = defineStore('hostGame', () => {
     
     hostSelectedPiece.value = null
     hostValidMoves.value = []
-    
-    checkGameStatus()
     
     return true
   }

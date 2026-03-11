@@ -281,7 +281,7 @@ function retryInitialization() {
 
 // Funciones de interacción con el juego
 function handleSquareClick(row, col) {
-  if (!isSeated.value || gameStatus.value !== 'playing') {
+  if (!isSeated.value || (gameStatus.value !== 'playing' && gameStatus.value !== 'check')) {
     return
   }
   
@@ -409,13 +409,18 @@ function createSquareTextures() {
 function update() {}
 
 function createBoard() {
-  const squareSize = game.value.config.width / 8
+  const margin = 24
+  const boardSize = game.value.config.width - (margin * 2)
+  const squareSize = boardSize / 8
+  
+  // Fondo negro para las franjas de coordenadas
+  this.add.rectangle(game.value.config.width/2, game.value.config.height/2, game.value.config.width, game.value.config.height, 0x1a1a1a)
   
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
       const visualRow = isFlipped.value ? 7 - row : row
-      const x = col * squareSize + squareSize / 2
-      const y = visualRow * squareSize + squareSize / 2
+      const x = margin + col * squareSize + squareSize / 2
+      const y = margin + visualRow * squareSize + squareSize / 2
       
       const isWhite = (visualRow + col) % 2 === 0
       const square = this.add.image(x, y, isWhite ? 'white-square' : 'black-square')
@@ -444,7 +449,46 @@ function updateBoardInPhaser(newBoard) {
     scene.pieceGroup = scene.add.group()
   }
   
-  const squareSize = game.value.config.width / 8
+  if (scene.coordGroup) {
+    scene.coordGroup.clear(true, true)
+  } else {
+    scene.coordGroup = scene.add.group()
+  }
+  
+  const margin = 24
+  const boardSize = game.value.config.width - (margin * 2)
+  const squareSize = boardSize / 8
+  
+  // Añadir coordenadas algebraicas en las franjas negras externas
+  const textStyle = { fontSize: '14px', fontFamily: 'Arial', color: '#ffffff', fontStyle: 'bold' }
+  for (let i = 0; i < 8; i++) {
+    // Filas (1-8)
+    const rankRow = i
+    const visualRow = isFlipped.value ? 7 - rankRow : rankRow
+    const rankText = (8 - rankRow).toString()
+    const centerY = margin + visualRow * squareSize + squareSize / 2
+    
+    // Izquierda (col 0) franja
+    const tLeft = scene.add.text(margin / 2, centerY, rankText, textStyle).setOrigin(0.5).setDepth(1)
+    scene.coordGroup.add(tLeft)
+    
+    // Derecha (col 7) franja
+    const tRight = scene.add.text(game.value.config.width - margin / 2, centerY, rankText, textStyle).setOrigin(0.5).setDepth(1)
+    scene.coordGroup.add(tRight)
+    
+    // Columnas (A-H)
+    const col = i
+    const fileText = isFlipped.value ? String.fromCharCode(72 - col) : String.fromCharCode(65 + col)
+    const centerX = margin + col * squareSize + squareSize / 2
+    
+    // Arriba (visualRow 0) franja
+    const tTop = scene.add.text(centerX, margin / 2, fileText, textStyle).setOrigin(0.5).setDepth(1)
+    scene.coordGroup.add(tTop)
+    
+    // Abajo (visualRow 7) franja
+    const tBottom = scene.add.text(centerX, game.value.config.height - margin / 2, fileText, textStyle).setOrigin(0.5).setDepth(1)
+    scene.coordGroup.add(tBottom)
+  }
   
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
@@ -452,8 +496,8 @@ function updateBoardInPhaser(newBoard) {
       if (!piece) continue
       
       const visualRow = isFlipped.value ? 7 - row : row
-      const x = col * squareSize + squareSize / 2
-      const y = visualRow * squareSize + squareSize / 2
+      const x = margin + col * squareSize + squareSize / 2
+      const y = margin + visualRow * squareSize + squareSize / 2
       
       const pieceText = scene.add.text(x, y, getPieceSymbol(piece), {
         fontSize: Math.floor(squareSize * 0.6) + 'px',
@@ -505,8 +549,8 @@ function updateBoardInPhaser(newBoard) {
     
     scene.input.on('dragend', function (pointer, gameObject) {
        // Calculate target squares based on pointer coordinates
-       const targetCol = Math.floor(pointer.x / squareSize)
-       let targetVisualRow = Math.floor(pointer.y / squareSize)
+       const targetCol = Math.floor((pointer.x - margin) / squareSize)
+       let targetVisualRow = Math.floor((pointer.y - margin) / squareSize)
        const targetRow = isFlipped.value ? 7 - targetVisualRow : targetVisualRow
        
        const originalCol = gameObject.originalCol
@@ -514,8 +558,8 @@ function updateBoardInPhaser(newBoard) {
        const originalVisualRow = isFlipped.value ? 7 - originalRow : originalRow
        
        // Snap back visually immediately
-       gameObject.x = originalCol * squareSize + squareSize / 2
-       gameObject.y = originalVisualRow * squareSize + squareSize / 2
+       gameObject.x = margin + originalCol * squareSize + squareSize / 2
+       gameObject.y = margin + originalVisualRow * squareSize + squareSize / 2
        
        // If dropped on a valid different square, trigger click there to execute move
        if ((targetCol !== originalCol || targetRow !== originalRow) && 
@@ -534,13 +578,13 @@ function updateBoardInPhaser(newBoard) {
   
   // Highlight valid moves if there is a selected piece
   if (selectedPiece.value) {
-     highlightValidMoves.call(scene, validMoves.value || [], squareSize)
+     highlightValidMoves.call(scene, validMoves.value || [], squareSize, margin)
   } else if (scene.highlightGroup) {
      scene.highlightGroup.clear(true, true)
   }
 }
 
-function highlightValidMoves(moves, squareSize) {
+function highlightValidMoves(moves, squareSize, margin) {
    // Add highlight indicators (small circles) for valid moves
    const scene = this
    if (!scene.highlightGroup) {
@@ -553,20 +597,20 @@ function highlightValidMoves(moves, squareSize) {
    if (selectedPiece.value) {
       const g = scene.add.graphics()
       g.lineStyle(4, 0x00FF00, 1) // Outline verde brillante
-      const px = selectedPiece.value.col * squareSize
+      const px = margin + selectedPiece.value.col * squareSize
       const visualRow = isFlipped.value ? 7 - selectedPiece.value.row : selectedPiece.value.row
-      const py = visualRow * squareSize
-      g.strokeRect(px + 2, py + 2, squareSize - 4, squareSize - 4)
+      const py = margin + visualRow * squareSize
+      g.strokeRect(px, py, squareSize, squareSize)
       scene.highlightGroup.add(g)
    }
    
    if (moves && moves.length > 0) {
       moves.forEach(move => {
-         const visualRow = isFlipped.value ? 7 - move.row : move.row
-         const x = move.col * squareSize + squareSize / 2
-         const y = visualRow * squareSize + squareSize / 2
+         const targetVisualRow = isFlipped.value ? 7 - move.row : move.row
+        const dotX = margin + move.col * squareSize + squareSize / 2
+        const dotY = margin + targetVisualRow * squareSize + squareSize / 2
          
-         const dot = scene.add.circle(x, y, squareSize * 0.15, 0x000000, 0.3)
+         const dot = scene.add.circle(dotX, dotY, squareSize * 0.15, 0x000000, 0.3)
          scene.highlightGroup.add(dot)
       })
    }
@@ -576,18 +620,18 @@ function highlightValidMoves(moves, squareSize) {
 watch([() => selectedPiece.value, () => validMoves.value], () => {
    if (gameInitialized.value && game.value) {
       const scene = game.value.scene.getScene('default')
-      const squareSize = game.value.config.width / 8
+      const margin = 24
+      const boardSize = game.value.config.width - (margin * 2)
+      const squareSize = boardSize / 8
       if (scene) {
           if (selectedPiece.value) {
-              highlightValidMoves.call(scene, validMoves.value || [], squareSize)
+              highlightValidMoves.call(scene, validMoves.value || [], squareSize, margin)
           } else if (scene.highlightGroup) {
               scene.highlightGroup.clear(true, true)
           }
       }
    }
 })
-
-
 function getPieceSymbol(piece) {
   const pieceMap = {
     'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',

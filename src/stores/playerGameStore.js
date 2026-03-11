@@ -368,6 +368,8 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
       isRemote: true
     })
     
+    console.log('[Guest] Historial de movimientos:', JSON.parse(JSON.stringify(moveHistory.value)))
+    
     if (selectedPiece.value &&
         selectedPiece.value.row === from.row &&
         selectedPiece.value.col === from.col) {
