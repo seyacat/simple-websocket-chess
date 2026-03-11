@@ -318,7 +318,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     
     // Actualizar cronómetros antes de cambiar de turno
     const now = Date.now()
-    if (gameState.value.gameStatus === GAME_STATUS.PLAYING) {
+    if (gameState.value.gameStatus === GAME_STATUS.PLAYING || gameState.value.gameStatus === GAME_STATUS.CHECK) {
       const elapsed = now - gameState.value.timers.lastUpdate
       gameState.value.timers[currentTurn.value] += elapsed
     }

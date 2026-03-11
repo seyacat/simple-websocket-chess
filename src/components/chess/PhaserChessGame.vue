@@ -170,7 +170,7 @@ function updateLocalTimers() {
   const tWhite = currentTimers.white || 0
   const tBlack = currentTimers.black || 0
   
-  if (gameStatus.value === 'playing') {
+  if (gameStatus.value === 'playing' || gameStatus.value === 'check') {
     const elapsed = Date.now() - (currentTimers.lastUpdate || Date.now())
     if (currentTurn.value === 'white') {
       localTimers.value = { white: tWhite + elapsed, black: tBlack }
