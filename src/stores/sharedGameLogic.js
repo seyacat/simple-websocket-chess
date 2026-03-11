@@ -100,6 +100,7 @@ export const SEAT_COLORS = {
  * @property {MoveData[]} moveHistory - Historial de movimientos
  * @property {Object} seats - Estado de los asientos
  * @property {string[]} spectators - Lista de tokens de espectadores
+ * @property {Object} timers - Estado de los cronómetros en ms
  */
 
 // Estructura de datos para asientos
@@ -227,6 +228,7 @@ export function createInitialGameState() {
     gameStatus: GAME_STATUS.WAITING,
     moveHistory: [],
     seats: createInitialSeats(),
-    spectators: []
+    spectators: [],
+    timers: { white: 0, black: 0, lastUpdate: Date.now() }
   }
-}
+}

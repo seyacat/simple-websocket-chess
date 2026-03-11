@@ -26,6 +26,12 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   const gameStatus = ref(GAME_STATUS.WAITING)
   const moveHistory = ref([])
   const playerColor = ref(COLORS.WHITE) // Color asignado al jugador local
+  const timers = ref({ white: 0, black: 0, lastUpdate: Date.now() })
+  
+  // Timeout para asegurar que los movimientos lleguen al host
+  const pendingMoveTimeout = ref(null)
+
+
   
   // Versión del último estado recibido del host (para detección de desync)
   // null = aún no hemos recibido ningún estado del host
@@ -58,6 +64,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     selectedPiece.value = null
     validMoves.value = []
     lastVersion.value = null
+    timers.value = initialGameState.timers || { white: 0, black: 0, lastUpdate: Date.now() }
   }
   
   // ─────────────────────────────────────────────────────────────────
@@ -166,7 +173,17 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     }
     
     const message = formatWebSocketMessage(MESSAGE_TYPES.MOVE, moveData)
-    connectionStore.sendMessage(connectionStore.subscribedHost, message).catch(error => {
+    connectionStore.sendMessage(connectionStore.subscribedHost, message).then(() => {
+      // Timeout backup if host doesn't acknowledge within 5s
+      if (pendingMoveTimeout.value) {
+        clearTimeout(pendingMoveTimeout.value)
+      }
+      pendingMoveTimeout.value = setTimeout(() => {
+        console.warn('Timeout enviando movimiento. Solicitando estado completo...')
+        requestFullState()
+        pendingMoveTimeout.value = null
+      }, 5000)
+    }).catch(error => {
       console.error('Error enviando movimiento al host:', error)
     })
   }
@@ -254,6 +271,17 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   // ─────────────────────────────────────────────────────────────────
   
   function applyUpdateFromHost(type, data) {
+    if (pendingMoveTimeout.value) {
+      if (
+        type === MESSAGE_TYPES.MOVE_APPLIED ||
+        type === MESSAGE_TYPES.GAME_STATE_UPDATE ||
+        type === MESSAGE_TYPES.FULL_STATE_RESPONSE
+      ) {
+        clearTimeout(pendingMoveTimeout.value)
+        pendingMoveTimeout.value = null
+      }
+    }
+
     switch (type) {
       case MESSAGE_TYPES.FULL_STATE_RESPONSE:
         applyFullGameStateUpdate(data)
@@ -266,6 +294,9 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
         break
         
       case MESSAGE_TYPES.MOVE_APPLIED:
+        if (data.newState && data.newState.timers) {
+          timers.value = data.newState.timers
+        }
         applyMoveFromHost(data.move)
         break
         
@@ -305,6 +336,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     if (gameState.moveHistory) moveHistory.value = gameState.moveHistory
     if (gameState.seats) seats.value = gameState.seats
     if (gameState.spectators) spectators.value = gameState.spectators
+    if (gameState.timers) timers.value = gameState.timers
     
     // Detectar el color del jugador mirando los asientos
     const myToken = connectionStore.token
@@ -359,6 +391,11 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   function applyGameStart(gameStartData) {
     gameStatus.value = GAME_STATUS.PLAYING
     currentTurn.value = COLORS.WHITE
+    if (gameStartData.timers) {
+      timers.value = gameStartData.timers
+    } else {
+      timers.value = { white: 0, black: 0, lastUpdate: Date.now() }
+    }
     
     if (gameStartData.color && gameStartData.playerToken === connectionStore.token) {
       playerColor.value = gameStartData.color
@@ -467,6 +504,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     playerColor,
     seats,
     spectators,
+    timers,
     lastVersion,
     
     // Getters

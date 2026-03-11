@@ -47,6 +47,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
   const moveHistory = computed(() => gameState.value.moveHistory)
   const seats = computed(() => gameState.value.seats)
   const spectators = computed(() => gameState.value.spectators)
+  const timers = computed(() => gameState.value.timers)
+
   
   // Getters adicionales
   const isHostPlaying = computed(() => hostAsPlayerColor.value !== null)
@@ -164,6 +166,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
       moveHistory: gameState.value.moveHistory,
       seats: gameState.value.seats,
       spectators: gameState.value.spectators,
+      timers: gameState.value.timers,
       version: currentVersion.value
     })
     connectionStore.sendMessage(guestToken, msg).catch(err => {
@@ -244,7 +247,8 @@ export const useHostGameStore = defineStore('hostGame', () => {
       newState: {
         board: gameState.value.board,
         currentTurn: gameState.value.currentTurn,
-        gameStatus: gameState.value.gameStatus
+        gameStatus: gameState.value.gameStatus,
+        timers: gameState.value.timers
       }
     })
     
@@ -311,6 +315,14 @@ export const useHostGameStore = defineStore('hostGame', () => {
    */
   function applyMove(moveData) {
     const { from, to, piece } = moveData
+    
+    // Actualizar cronómetros antes de cambiar de turno
+    const now = Date.now()
+    if (gameState.value.gameStatus === GAME_STATUS.PLAYING) {
+      const elapsed = now - gameState.value.timers.lastUpdate
+      gameState.value.timers[currentTurn.value] += elapsed
+    }
+    gameState.value.timers.lastUpdate = now
     
     const newBoard = applyMoveToBoard(board.value, from.row, from.col, to.row, to.col, piece)
     gameState.value.board = newBoard
@@ -432,10 +444,14 @@ export const useHostGameStore = defineStore('hostGame', () => {
       startGame()
     } else if (bothSeatsOccupied.value && gameStatus.value === GAME_STATUS.PAUSED) {
       gameState.value.gameStatus = GAME_STATUS.PLAYING
+      if (gameState.value.timers) {
+        gameState.value.timers.lastUpdate = Date.now()
+      }
       broadcastGameUpdate(MESSAGE_TYPES.GAME_START_AUTO, {
         timestamp: Date.now(),
         whitePlayer: seats.value.white.playerToken,
-        blackPlayer: seats.value.black.playerToken
+        blackPlayer: seats.value.black.playerToken,
+        timers: gameState.value.timers
       })
     }
   }
@@ -446,16 +462,19 @@ export const useHostGameStore = defineStore('hostGame', () => {
   function startGame() {
     gameState.value.gameStatus = GAME_STATUS.PLAYING
     gameState.value.currentTurn = COLORS.WHITE
+    gameState.value.timers = { white: 0, black: 0, lastUpdate: Date.now() }
     
     if (moveHistory.value.length === 0) {
       const initialGameState = createInitialGameState()
       gameState.value.board = initialGameState.board
+      // The initial board includes timers now, but we just reset it above
     }
     
     broadcastGameUpdate(MESSAGE_TYPES.GAME_START, {
       timestamp: Date.now(),
       whitePlayer: seats.value.white.playerToken,
-      blackPlayer: seats.value.black.playerToken
+      blackPlayer: seats.value.black.playerToken,
+      timers: gameState.value.timers
     })
   }
   
@@ -707,6 +726,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     moveHistory,
     seats,
     spectators,
+    timers,
     
     // Estado del host como jugador
     hostAsPlayerColor,

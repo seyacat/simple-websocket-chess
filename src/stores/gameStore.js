@@ -26,6 +26,7 @@ export const useGameStore = defineStore('game', () => {
   const playerColor = computed(() => activeStore.value.playerColor)
   const seats = computed(() => activeStore.value.seats)
   const spectators = computed(() => activeStore.value.spectators)
+  const timers = computed(() => activeStore.value.timers)
   
   // Mantener isHost por compatibilidad
   const isHostRef = ref(false)
@@ -227,6 +228,7 @@ export const useGameStore = defineStore('game', () => {
     isHost: isHostRef,
     seats,
     spectators,
+    timers,
     
     // Getters
     isMyTurn,

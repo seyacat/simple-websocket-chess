@@ -5,6 +5,12 @@
       <div v-if="seats.black.occupied" class="seat-info occupied">
         <span class="seat-icon">♚</span>
         <span class="player-name">{{ seats.black.playerName || 'Jugador' }}</span>
+        
+        <div class="player-indicators">
+          <span class="player-timer">{{ formatTime(localTimers.black) }}</span>
+          <span v-if="currentTurn === 'black' && gameStatus === 'playing'" class="turn-indicator" title="Tu turno">🟢</span>
+        </div>
+
         <button 
           v-if="mySeatColor === 'black'" 
           @click="leaveSeat" 
@@ -53,6 +59,12 @@
       <div v-if="seats.white.occupied" class="seat-info occupied">
         <span class="seat-icon">♔</span>
         <span class="player-name">{{ seats.white.playerName || 'Jugador' }}</span>
+        
+        <div class="player-indicators">
+          <span class="player-timer">{{ formatTime(localTimers.white) }}</span>
+          <span v-if="currentTurn === 'white' && gameStatus === 'playing'" class="turn-indicator" title="Tu turno">🟢</span>
+        </div>
+
         <button 
           v-if="mySeatColor === 'white'" 
           @click="leaveSeat" 
@@ -130,6 +142,35 @@ const moveHistory = computed(() => activeStore.value.moveHistory)
 const playerColor = computed(() => activeStore.value.playerColor)
 const seats = computed(() => activeStore.value.seats)
 const spectators = computed(() => activeStore.value.spectators)
+const timers = computed(() => activeStore.value.timers || { white: 0, black: 0, lastUpdate: Date.now() })
+
+// Local timer projection setup
+const localTimers = ref({ white: 0, black: 0 })
+let timerInterval = null
+
+function updateLocalTimers() {
+  const currentTimers = timers.value
+  const tWhite = currentTimers.white || 0
+  const tBlack = currentTimers.black || 0
+  
+  if (gameStatus.value === 'playing') {
+    const elapsed = Date.now() - (currentTimers.lastUpdate || Date.now())
+    if (currentTurn.value === 'white') {
+      localTimers.value = { white: tWhite + elapsed, black: tBlack }
+    } else {
+      localTimers.value = { white: tWhite, black: tBlack + elapsed }
+    }
+  } else {
+    localTimers.value = { white: tWhite, black: tBlack }
+  }
+}
+
+function formatTime(ms) {
+  const totalSeconds = Math.floor((ms || 0) / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
 
 // Getters específicos del store activo
 const isSeated = computed(() => {
@@ -231,8 +272,28 @@ function handleSquareClick(row, col) {
     return
   }
   
-  // Si hay una pieza seleccionada, intentar mover
+  // Si hay una pieza seleccionada, intentar mover o cambiar selección
   if (selectedPiece.value) {
+    const clickedPiece = board.value[row][col]
+    const pColor = mySeatColor.value
+    
+    // Check if the clicked piece belongs to the current player
+    const isOwnPiece = clickedPiece && (
+      (pColor === 'white' && clickedPiece === clickedPiece.toUpperCase()) ||
+      (pColor === 'black' && clickedPiece === clickedPiece.toLowerCase())
+    )
+    
+    // Si hace click en otra pieza propia, cambiar la selección
+    if (isOwnPiece) {
+      if (isHost.value) {
+        hostGameStore.selectPieceAsHost({ row, col })
+      } else {
+        playerGameStore.selectPiece({ row, col })
+      }
+      return
+    }
+  
+    // Si no es pieza propia, intentar el movimiento
     const moveSuccess = isHost.value
       ? hostGameStore.makeMoveAsHost({ row, col })
       : playerGameStore.makeMove({ row, col })
@@ -379,13 +440,76 @@ function updateBoardInPhaser(newBoard) {
       })
       .setOrigin(0.5)
       
+      // Setup drag and drop for pieces of the player's color
+      const pColor = mySeatColor.value
+      const isPickable = piece && isSeated.value && gameStatus.value === 'playing' && (
+        (pColor === 'white' && piece === piece.toUpperCase()) ||
+        (pColor === 'black' && piece === piece.toLowerCase())
+      )
+      
+      if (isPickable) {
+        pieceText.setInteractive()
+        scene.input.setDraggable(pieceText)
+        
+        // Save original row/col for snapping
+        pieceText.originalRow = row
+        pieceText.originalCol = col
+        
+        // Select piece instantly on pointerdown (allows immediate selection and drag synergy)
+        pieceText.on('pointerdown', () => {
+           handleSquareClick(row, col)
+        })
+      }
+      
       scene.pieceGroup.add(pieceText)
     }
   }
   
+  // Setup drag event listeners on the scene
+  if (!scene.dragEventsAdded) {
+    scene.input.on('dragstart', function (pointer, gameObject) {
+       // Bring the dragged piece to the top
+       scene.children.bringToTop(gameObject)
+       // Selecting the piece is already handled by pointerdown
+    })
+    
+    scene.input.on('drag', function (pointer, gameObject, dragX, dragY) {
+       gameObject.x = dragX
+       gameObject.y = dragY
+    })
+    
+    scene.input.on('dragend', function (pointer, gameObject) {
+       // Calculate target squares based on pointer coordinates
+       const targetCol = Math.floor(pointer.x / squareSize)
+       const targetRow = Math.floor(pointer.y / squareSize)
+       
+       const originalCol = gameObject.originalCol
+       const originalRow = gameObject.originalRow
+       
+       // Snap back visually immediately
+       gameObject.x = originalCol * squareSize + squareSize / 2
+       gameObject.y = originalRow * squareSize + squareSize / 2
+       
+       // If dropped on a valid different square, trigger click there to execute move
+       if ((targetCol !== originalCol || targetRow !== originalRow) && 
+           targetCol >= 0 && targetCol < 8 && targetRow >= 0 && targetRow < 8) {
+           
+           // If we have valid moves and the target is one of them, executing jump
+           const isValidTarget = validMoves.value.some(m => m.row === targetRow && m.col === targetCol)
+           if (isValidTarget) {
+               handleSquareClick(targetRow, targetCol)
+           }
+       }
+    })
+    
+    scene.dragEventsAdded = true
+  }
+  
   // Highlight valid moves if there is a selected piece
   if (selectedPiece.value) {
-     highlightValidMoves.call(scene, validMoves.value, squareSize)
+     highlightValidMoves.call(scene, validMoves.value || [], squareSize)
+  } else if (scene.highlightGroup) {
+     scene.highlightGroup.clear(true, true)
   }
 }
 
@@ -398,19 +522,39 @@ function highlightValidMoves(moves, squareSize) {
       scene.highlightGroup.clear(true, true)
    }
    
-   moves.forEach(move => {
-      const x = move.col * squareSize + squareSize / 2
-      const y = move.row * squareSize + squareSize / 2
-      
-      const dot = scene.add.circle(x, y, squareSize * 0.15, 0x000000, 0.3)
-      scene.highlightGroup.add(dot)
-   })
+   // Dibujar el contorno cuadrado de pieza seleccionada
+   if (selectedPiece.value) {
+      const g = scene.add.graphics()
+      g.lineStyle(4, 0x00FF00, 1) // Outline verde brillante
+      const px = selectedPiece.value.col * squareSize
+      const py = selectedPiece.value.row * squareSize
+      g.strokeRect(px + 2, py + 2, squareSize - 4, squareSize - 4)
+      scene.highlightGroup.add(g)
+   }
+   
+   if (moves && moves.length > 0) {
+      moves.forEach(move => {
+         const x = move.col * squareSize + squareSize / 2
+         const y = move.row * squareSize + squareSize / 2
+         
+         const dot = scene.add.circle(x, y, squareSize * 0.15, 0x000000, 0.3)
+         scene.highlightGroup.add(dot)
+      })
+   }
 }
 
-// Modified watcher to redraw valid moves
-watch(() => selectedPiece.value, () => {
+// Watch both selectedPiece and validMoves to draw highlighting without redrawing all pieces
+watch([() => selectedPiece.value, () => validMoves.value], () => {
    if (gameInitialized.value && game.value) {
-      updateBoardInPhaser(board.value) // Redraws everything including highlights
+      const scene = game.value.scene.getScene('default')
+      const squareSize = game.value.config.width / 8
+      if (scene) {
+          if (selectedPiece.value) {
+              highlightValidMoves.call(scene, validMoves.value || [], squareSize)
+          } else if (scene.highlightGroup) {
+              scene.highlightGroup.clear(true, true)
+          }
+      }
    }
 })
 
@@ -433,9 +577,11 @@ function updateGameStatusInPhaser(newStatus) {}
 // Lifecycle hooks
 onMounted(() => {
   initializeGame()
+  timerInterval = setInterval(updateLocalTimers, 100)
 })
 
 onBeforeUnmount(() => {
+  if (timerInterval) clearInterval(timerInterval)
   if (game.value) {
     game.value.destroy(true)
     game.value = null
@@ -496,6 +642,33 @@ defineExpose({
 .player-name {
   font-weight: bold;
   flex-grow: 1;
+}
+
+.player-indicators {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 15px;
+}
+
+.player-timer {
+  font-family: monospace;
+  font-size: 1.2em;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.turn-indicator {
+  font-size: 16px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 .empty-seat {
