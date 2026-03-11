@@ -1,8 +1,8 @@
 <template>
   <div class="phaser-chess-game">
     <!-- Overlay superior: Asiento Negras -->
-    <div class="seat-bar black-seat-bar">
-      <div v-if="seats.black.occupied" class="seat-info occupied">
+    <div class="seat-bar black-seat-bar" :style="{ order: isFlipped ? 3 : 1 }">
+      <div v-if="seats.black.occupied" class="seat-info occupied" :class="{ 'inactive-turn': gameStatus === 'playing' && currentTurn !== 'black' }">
         <span class="seat-icon">♚</span>
         <span class="player-name">{{ seats.black.playerName || 'Jugador' }}</span>
         
@@ -32,7 +32,7 @@
     </div>
 
     <!-- Contenedor del juego de Phaser -->
-    <div class="board-wrapper">
+    <div class="board-wrapper" style="order: 2;">
       <div ref="gameContainer" class="game-container"></div>
       
       <div v-if="!gameInitialized" class="loading-overlay">
@@ -55,8 +55,8 @@
     </div>
 
     <!-- Overlay inferior: Asiento Blancas -->
-    <div class="seat-bar white-seat-bar">
-      <div v-if="seats.white.occupied" class="seat-info occupied">
+    <div class="seat-bar white-seat-bar" :style="{ order: isFlipped ? 1 : 3 }">
+      <div v-if="seats.white.occupied" class="seat-info occupied" :class="{ 'inactive-turn': gameStatus === 'playing' && currentTurn !== 'white' }">
         <span class="seat-icon">♔</span>
         <span class="player-name">{{ seats.white.playerName || 'Jugador' }}</span>
         
@@ -143,6 +143,9 @@ const playerColor = computed(() => activeStore.value.playerColor)
 const seats = computed(() => activeStore.value.seats)
 const spectators = computed(() => activeStore.value.spectators)
 const timers = computed(() => activeStore.value.timers || { white: 0, black: 0, lastUpdate: Date.now() })
+
+// Propiedad computada para saber si el tablero debe girarse
+const isFlipped = computed(() => isSeated.value && mySeatColor.value === 'black')
 
 // Local timer projection setup
 const localTimers = ref({ white: 0, black: 0 })
@@ -243,6 +246,12 @@ watch(() => board.value, (newBoard) => {
     updateBoardInPhaser(newBoard)
   }
 }, { deep: true })
+
+watch(() => isFlipped.value, () => {
+  if (gameInitialized.value && game.value) {
+    updateBoardInPhaser(board.value)
+  }
+})
 
 watch(() => gameStatus.value, (newStatus) => {
   if (gameInitialized.value && game.value) {
@@ -390,10 +399,11 @@ function createBoard() {
   
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
+      const visualRow = isFlipped.value ? 7 - row : row
       const x = col * squareSize + squareSize / 2
-      const y = row * squareSize + squareSize / 2
+      const y = visualRow * squareSize + squareSize / 2
       
-      const isWhite = (row + col) % 2 === 0
+      const isWhite = (visualRow + col) % 2 === 0
       const square = this.add.image(x, y, isWhite ? 'white-square' : 'black-square')
         .setDisplaySize(squareSize, squareSize)
         .setInteractive()
@@ -427,8 +437,9 @@ function updateBoardInPhaser(newBoard) {
       const piece = newBoard[row][col]
       if (!piece) continue
       
+      const visualRow = isFlipped.value ? 7 - row : row
       const x = col * squareSize + squareSize / 2
-      const y = row * squareSize + squareSize / 2
+      const y = visualRow * squareSize + squareSize / 2
       
       const pieceText = scene.add.text(x, y, getPieceSymbol(piece), {
         fontSize: Math.floor(squareSize * 0.6) + 'px',
@@ -481,14 +492,16 @@ function updateBoardInPhaser(newBoard) {
     scene.input.on('dragend', function (pointer, gameObject) {
        // Calculate target squares based on pointer coordinates
        const targetCol = Math.floor(pointer.x / squareSize)
-       const targetRow = Math.floor(pointer.y / squareSize)
+       let targetVisualRow = Math.floor(pointer.y / squareSize)
+       const targetRow = isFlipped.value ? 7 - targetVisualRow : targetVisualRow
        
        const originalCol = gameObject.originalCol
        const originalRow = gameObject.originalRow
+       const originalVisualRow = isFlipped.value ? 7 - originalRow : originalRow
        
        // Snap back visually immediately
        gameObject.x = originalCol * squareSize + squareSize / 2
-       gameObject.y = originalRow * squareSize + squareSize / 2
+       gameObject.y = originalVisualRow * squareSize + squareSize / 2
        
        // If dropped on a valid different square, trigger click there to execute move
        if ((targetCol !== originalCol || targetRow !== originalRow) && 
@@ -527,15 +540,17 @@ function highlightValidMoves(moves, squareSize) {
       const g = scene.add.graphics()
       g.lineStyle(4, 0x00FF00, 1) // Outline verde brillante
       const px = selectedPiece.value.col * squareSize
-      const py = selectedPiece.value.row * squareSize
+      const visualRow = isFlipped.value ? 7 - selectedPiece.value.row : selectedPiece.value.row
+      const py = visualRow * squareSize
       g.strokeRect(px + 2, py + 2, squareSize - 4, squareSize - 4)
       scene.highlightGroup.add(g)
    }
    
    if (moves && moves.length > 0) {
       moves.forEach(move => {
+         const visualRow = isFlipped.value ? 7 - move.row : move.row
          const x = move.col * squareSize + squareSize / 2
-         const y = move.row * squareSize + squareSize / 2
+         const y = visualRow * squareSize + squareSize / 2
          
          const dot = scene.add.circle(x, y, squareSize * 0.15, 0x000000, 0.3)
          scene.highlightGroup.add(dot)
@@ -633,6 +648,12 @@ defineExpose({
   gap: 15px;
   width: 100%;
   justify-content: space-between;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.inactive-turn {
+  opacity: 0.5;
+  filter: grayscale(100%);
 }
 
 .seat-icon {
