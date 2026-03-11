@@ -7,8 +7,9 @@
         <span class="player-name">{{ seats.black.playerName || 'Jugador' }}</span>
         
         <div class="player-indicators">
+          <span v-if="gameStatus === 'check' && currentTurn === 'black'" class="check-indicator pulse-animation" title="¡Jaque!">❌</span>
           <span class="player-timer">{{ formatTime(localTimers.black) }}</span>
-          <span v-if="currentTurn === 'black' && gameStatus === 'playing'" class="turn-indicator" title="Tu turno">🟢</span>
+          <span v-if="currentTurn === 'black' && (gameStatus === 'playing' || gameStatus === 'check')" class="turn-indicator" title="Tu turno">🟢</span>
         </div>
 
         <button 
@@ -35,9 +36,7 @@
     <div class="board-wrapper" style="order: 2;">
       <div ref="gameContainer" class="game-container"></div>
       
-      <div v-if="gameStatus === 'check'" class="game-status-overlay check-overlay">
-        <h2>¡Jaque!</h2>
-      </div>
+
       
       <div v-if="gameStatus === 'checkmate'" class="game-status-overlay checkmate-overlay">
         <h2>¡Jaque Mate!</h2>
@@ -75,8 +74,9 @@
         <span class="player-name">{{ seats.white.playerName || 'Jugador' }}</span>
         
         <div class="player-indicators">
+          <span v-if="gameStatus === 'check' && currentTurn === 'white'" class="check-indicator pulse-animation" title="¡Jaque!">❌</span>
           <span class="player-timer">{{ formatTime(localTimers.white) }}</span>
-          <span v-if="currentTurn === 'white' && gameStatus === 'playing'" class="turn-indicator" title="Tu turno">🟢</span>
+          <span v-if="currentTurn === 'white' && (gameStatus === 'playing' || gameStatus === 'check')" class="turn-indicator" title="Tu turno">🟢</span>
         </div>
 
         <button 

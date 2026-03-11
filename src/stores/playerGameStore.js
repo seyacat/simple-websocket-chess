@@ -14,7 +14,8 @@ import {
   SEAT_COLORS,
   formatWebSocketMessage,
   parseWebSocketMessage,
-  createInitialGameState
+  createInitialGameState,
+  applyMove
 } from './sharedGameLogic'
 
 export const usePlayerGameStore = defineStore('playerGame', () => {
@@ -354,8 +355,8 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   function applyMoveFromHost(moveData) {
     const { from, to, piece } = moveData
     
-    board.value[to.row][to.col] = piece
-    board.value[from.row][from.col] = ''
+    // Usar el motor para aplicar el movimiento (así captura reglas secundarias como el enroque)
+    board.value = applyMove(board.value, from.row, from.col, to.row, to.col)
     
     const capturedPiece = moveData.captured || ''
     const moveNotation = getAlgebraicNotation(from.row, from.col, to.row, to.col, capturedPiece)
