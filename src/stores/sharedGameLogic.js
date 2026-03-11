@@ -178,7 +178,7 @@ export function createInitialSeats() {
  * @param {string} playerColor - Color del jugador ('white' o 'black')
  * @returns {boolean}
  */
-export function isValidMoveForPlayer(board, from, to, piece, playerColor) {
+export function isValidMoveForPlayer(board, from, to, piece, playerColor, moveHistory = []) {
   // Verificar que la pieza sea del color correcto
   if (playerColor === 'white' && piece === piece.toLowerCase()) {
     return false // Pieza negra cuando el jugador es blanco
@@ -188,7 +188,7 @@ export function isValidMoveForPlayer(board, from, to, piece, playerColor) {
   }
   
   // Usar la función de validación de chessRules
-  return isValidMove(board, from.row, from.col, to.row, to.col, piece)
+  return isValidMove(board, from.row, from.col, to.row, to.col, moveHistory)
 }
 
 /**

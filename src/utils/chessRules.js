@@ -37,8 +37,35 @@ export function isPieceColor(piece, color) {
   return getPieceColor(piece) === color
 }
 
-// Obtener movimientos válidos básicos para una pieza
-export function getValidMoves(board, row, col, piece) {
+// Verifica si una pieza se ha movido alguna vez desde su origen
+export function hasPieceMoved(moveHistory, row, col) {
+  if (!moveHistory || moveHistory.length === 0) return false
+  return moveHistory.some(m => m.from.row === row && m.from.col === col)
+}
+
+// Obtener todos los movimientos totalmente válidos (protegen al rey)
+export function getValidMoves(board, row, col, piece, moveHistory = []) {
+  if (!piece) return []
+  
+  const pieceColor = getPieceColor(piece)
+  const pseudoLegalMoves = getPseudoLegalMoves(board, row, col, piece, moveHistory)
+  const strictLegalMoves = []
+  
+  for (const move of pseudoLegalMoves) {
+    // Simular el movimiento
+    const tempBoard = applyMove(board, row, col, move.row, move.col)
+    
+    // Si el movimiento NO deja a nuestro propio rey en jaque, es legal
+    if (!isKingInCheck(tempBoard, pieceColor)) {
+      strictLegalMoves.push(move)
+    }
+  }
+  
+  return strictLegalMoves
+}
+
+// Obtener movimientos pseudo-legales (ignora la seguridad del rey)
+export function getPseudoLegalMoves(board, row, col, piece, moveHistory = [], checkCastling = true) {
   if (!piece) return []
   
   const pieceType = getPieceType(piece)
@@ -56,7 +83,7 @@ export function getValidMoves(board, row, col, piece) {
     case PIECE_TYPES.QUEEN:
       return getQueenMoves(board, row, col, pieceColor)
     case PIECE_TYPES.KING:
-      return getKingMoves(board, row, col, pieceColor)
+      return getKingMoves(board, row, col, pieceColor, moveHistory, checkCastling)
     default:
       return []
   }
@@ -202,8 +229,8 @@ function getQueenMoves(board, row, col, color) {
   return [...bishopMoves, ...rookMoves]
 }
 
-// Movimientos del rey (una casilla en cualquier dirección)
-function getKingMoves(board, row, col, color) {
+// Movimientos del rey (una casilla en cualquier dirección + enroque)
+function getKingMoves(board, row, col, color, moveHistory = [], checkCastling = true) {
   const moves = []
   const kingMoves = [
     { dr: -1, dc: -1 }, { dr: -1, dc: 0 }, { dr: -1, dc: 1 },
@@ -223,7 +250,40 @@ function getKingMoves(board, row, col, color) {
     }
   }
   
-  // TODO: Implementar enroque
+  // Enroque (Castling)
+  if (checkCastling && !hasPieceMoved(moveHistory, row, col)) {
+    // Para blancas: fila 7. Para negras: fila 0.
+    const expectedRow = color === COLORS.WHITE ? 7 : 0
+    if (row === expectedRow && col === 4) {
+      // El rey no debe estar en jaque al iniciar el enroque
+      if (!isKingInCheck(board, color)) {
+        
+        // Enroque corto (Kingside) - Torre en col 7 (h1/h8)
+        if (!hasPieceMoved(moveHistory, expectedRow, 7) && board[expectedRow][7] && getPieceColor(board[expectedRow][7]) === color && getPieceType(board[expectedRow][7]) === PIECE_TYPES.ROOK) {
+          // Casillas libres entre Rey y Torre
+          if (!board[expectedRow][5] && !board[expectedRow][6]) {
+            // El rey no puede pasar por jaque (casilla 5)
+            const tempBoard = applyMove(board, row, col, expectedRow, 5)
+            if (!isKingInCheck(tempBoard, color)) {
+              moves.push({ row: expectedRow, col: 6 }) // Destino final comprobado en getValidMoves
+            }
+          }
+        }
+        
+        // Enroque largo (Queenside) - Torre en col 0 (a1/a8)
+        if (!hasPieceMoved(moveHistory, expectedRow, 0) && board[expectedRow][0] && getPieceColor(board[expectedRow][0]) === color && getPieceType(board[expectedRow][0]) === PIECE_TYPES.ROOK) {
+          // Casillas libres entre Rey y Torre
+          if (!board[expectedRow][1] && !board[expectedRow][2] && !board[expectedRow][3]) {
+            // El rey no puede pasar por jaque (casilla 3)
+            const tempBoard = applyMove(board, row, col, expectedRow, 3)
+            if (!isKingInCheck(tempBoard, color)) {
+              moves.push({ row: expectedRow, col: 2 }) // Destino final comprobado en getValidMoves
+            }
+          }
+        }
+      }
+    }
+  }
   
   return moves
 }
@@ -234,11 +294,11 @@ function isValidPosition(row, col) {
 }
 
 // Verificar si un movimiento es válido
-export function isValidMove(board, fromRow, fromCol, toRow, toCol) {
+export function isValidMove(board, fromRow, fromCol, toRow, toCol, moveHistory = []) {
   const piece = board[fromRow][fromCol]
   if (!piece) return false
   
-  const validMoves = getValidMoves(board, fromRow, fromCol, piece)
+  const validMoves = getValidMoves(board, fromRow, fromCol, piece, moveHistory)
   return validMoves.some(move => move.row === toRow && move.col === toCol)
 }
 
@@ -249,12 +309,22 @@ export function applyMove(board, fromRow, fromCol, toRow, toCol) {
   
   if (!piece) return board
   
-  // Mover la pieza
+  // Mover la pieza al destino
   newBoard[toRow][toCol] = piece
   newBoard[fromRow][fromCol] = ''
   
   // TODO: Implementar promoción de peón
-  // TODO: Implementar enroque
+  // Implementar Enroque Automático (Si el rey se movió horizontalmente 2 casillas)
+  if (getPieceType(piece) === PIECE_TYPES.KING && Math.abs(toCol - fromCol) === 2) {
+    if (toCol === 6) { // Enroque corto (Columna G)
+      newBoard[fromRow][5] = newBoard[fromRow][7] // Mover torre a la casilla 5
+      newBoard[fromRow][7] = '' // Limpiar casilla 7 original
+    } else if (toCol === 2) { // Enroque largo (Columna C)
+      newBoard[fromRow][3] = newBoard[fromRow][0] // Mover torre a la casilla 3
+      newBoard[fromRow][0] = '' // Limpiar casilla 0 original
+    }
+  }
+  
   // TODO: Implementar captura al paso
   
   return newBoard
@@ -287,7 +357,9 @@ export function isKingInCheck(board, color) {
     for (let col = 0; col < 8; col++) {
       const piece = board[row][col]
       if (piece && getPieceColor(piece) === opponentColor) {
-        const moves = getValidMoves(board, row, col, piece)
+        // Pasa checkCastling=false para evitar recursividad infinita
+        // ya que getValidMoves/getKingMoves evalúa isKingInCheck para el enroque
+        const moves = getPseudoLegalMoves(board, row, col, piece, [], false)
         if (moves.some(move => move.row === kingRow && move.col === kingCol)) {
           return true
         }
@@ -298,59 +370,41 @@ export function isKingInCheck(board, color) {
   return false
 }
 
+// Retorna todos los movimientos legales posibles de un jugador (Para mate/ahogado)
+export function getTotalValidMoves(board, color, moveHistory = []) {
+  let count = 0
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col]
+      if (piece && getPieceColor(piece) === color) {
+        count += getValidMoves(board, row, col, piece, moveHistory).length
+      }
+    }
+  }
+  return count
+}
+
 // Verificar si el rey está en jaque mate
-export function isCheckmate(board, color) {
+export function isCheckmate(board, color, moveHistory = []) {
   // Primero verificar si el rey está en jaque
   if (!isKingInCheck(board, color)) {
     return false
   }
   
-  // Buscar algún movimiento legal que saque al rey del jaque
-  for (let fromRow = 0; fromRow < 8; fromRow++) {
-    for (let fromCol = 0; fromCol < 8; fromCol++) {
-      const piece = board[fromRow][fromCol]
-      if (piece && getPieceColor(piece) === color) {
-        const validMoves = getValidMoves(board, fromRow, fromCol, piece)
-        
-        for (const move of validMoves) {
-          // Aplicar movimiento temporalmente
-          const newBoard = applyMove(board, fromRow, fromCol, move.row, move.col)
-          
-          // Verificar si el rey sigue en jaque
-          if (!isKingInCheck(newBoard, color)) {
-            return false // Hay al menos un movimiento que evita el jaque
-          }
-        }
-      }
-    }
-  }
-  
-  // No hay movimientos legales que eviten el jaque
-  return true
+  // Como getValidMoves ahora filtra movimientos que dejan el rey en jaque,
+  // si estamos en jaque y no hay movimientos válidos, es mate.
+  return getTotalValidMoves(board, color, moveHistory) === 0
 }
 
-// Verificar tablas (stalemate)
-export function isStalemate(board, color) {
-  // Verificar si el rey NO está en jaque
+// Verificar tablas (stalemate - ahogado)
+export function isStalemate(board, color, moveHistory = []) {
+  // Para que sea ahogado, el rey NO debe estar en jaque
   if (isKingInCheck(board, color)) {
     return false
   }
   
-  // Verificar si hay algún movimiento legal
-  for (let fromRow = 0; fromRow < 8; fromRow++) {
-    for (let fromCol = 0; fromCol < 8; fromCol++) {
-      const piece = board[fromRow][fromCol]
-      if (piece && getPieceColor(piece) === color) {
-        const validMoves = getValidMoves(board, fromRow, fromCol, piece)
-        if (validMoves.length > 0) {
-          return false // Hay al menos un movimiento legal
-        }
-      }
-    }
-  }
-  
-  // No hay movimientos legales y el rey no está en jaque
-  return true
+  // Y el jugador no tiene ningún movimiento legal disponible
+  return getTotalValidMoves(board, color, moveHistory) === 0
 }
 
 // Crear tablero inicial

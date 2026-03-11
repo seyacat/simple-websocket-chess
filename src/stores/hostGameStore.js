@@ -303,11 +303,11 @@ export const useHostGameStore = defineStore('hostGame', () => {
   function validateMove(moveData, playerColor) {
     const { from, to, piece } = moveData
     
-    if (!isValidMoveForPlayer(board.value, from, to, piece, playerColor)) {
+    if (!isValidMoveForPlayer(board.value, from, to, piece, playerColor, gameState.value.moveHistory)) {
       return false
     }
     
-    return isValidMove(board.value, from.row, from.col, to.row, to.col, piece)
+    return isValidMove(board.value, from.row, from.col, to.row, to.col, gameState.value.moveHistory)
   }
   
   /**
@@ -579,7 +579,7 @@ export const useHostGameStore = defineStore('hostGame', () => {
     }
     
     hostSelectedPiece.value = position
-    hostValidMoves.value = getValidMoves(board.value, row, col, piece)
+    hostValidMoves.value = getValidMoves(board.value, row, col, piece, gameState.value.moveHistory)
   }
   
   /**

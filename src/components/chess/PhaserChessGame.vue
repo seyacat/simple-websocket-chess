@@ -35,6 +35,20 @@
     <div class="board-wrapper" style="order: 2;">
       <div ref="gameContainer" class="game-container"></div>
       
+      <div v-if="gameStatus === 'check'" class="game-status-overlay check-overlay">
+        <h2>¡Jaque!</h2>
+      </div>
+      
+      <div v-if="gameStatus === 'checkmate'" class="game-status-overlay checkmate-overlay">
+        <h2>¡Jaque Mate!</h2>
+        <p>Ganan las {{ currentTurn === 'white' ? 'Negras' : 'Blancas' }}</p>
+      </div>
+
+      <div v-if="gameStatus === 'stalemate'" class="game-status-overlay stalemate-overlay">
+        <h2>Tablas</h2>
+        <p>Por Ahogado</p>
+      </div>
+
       <div v-if="!gameInitialized" class="loading-overlay">
         <div class="loading-spinner"></div>
         <p>Inicializando juego...</p>
@@ -776,6 +790,50 @@ defineExpose({
   align-items: center;
   padding: 5px 10px;
 }
+
+/* Game Status Overlays */
+.game-status-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 12px;
+  padding: 20px 40px;
+  text-align: center;
+  z-index: 20;
+  pointer-events: none;
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.game-status-overlay h2 {
+  margin: 0 0 10px 0;
+  font-size: 2.5rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.game-status-overlay p {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #DDD;
+}
+
+.check-overlay { border: 2px solid #FFA500; }
+.check-overlay h2 { color: #FFD700; text-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
+
+.checkmate-overlay { border: 2px solid #FF0000; }
+.checkmate-overlay h2 { color: #FF4444; text-shadow: 0 0 10px rgba(255, 0, 0, 0.5); }
+
+.stalemate-overlay { border: 2px solid #888; }
+.stalemate-overlay h2 { color: #AAAAAA; }
 
 .player-status-indicator {
   padding: 6px 12px;

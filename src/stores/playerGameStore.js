@@ -132,7 +132,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     }
     
     selectedPiece.value = position
-    validMoves.value = getValidMoves(board.value, row, col, piece)
+    validMoves.value = getValidMoves(board.value, row, col, piece, moveHistory.value)
   }
   
   function makeMove(toPosition) {
