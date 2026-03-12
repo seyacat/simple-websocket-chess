@@ -146,13 +146,8 @@ export const useConnectionStore = defineStore('connection', () => {
   // Acciones específicas del proxy WebSocket
   const connect = async () => {
     try {
-      // Configurar URL del proxy
-      const options = {
-        url: wsUrl.value,
-        autoReconnect: true,
-        maxReconnectAttempts: parseInt(import.meta.env.VITE_WS_MAX_RECONNECT_ATTEMPTS) || 5,
-        reconnectDelay: parseInt(import.meta.env.VITE_WS_RECONNECT_DELAY) || 3000
-      }
+      // Aplicar URL actual de la configuración (desde .env)
+      wsProxyClient.updateConfig({ url: wsUrl.value })
       
       // Configurar handlers de eventos del proxy
       setupProxyEventHandlers()

@@ -49,6 +49,18 @@ export class WebSocketProxyClient {
   }
 
   /**
+   * Update client configuration
+   * @param {Object} options Configuration options to update
+   */
+  updateConfig(options = {}) {
+    this.config = {
+      ...this.config,
+      ...options
+    };
+    console.log('WebSocket config updated:', this.config);
+  }
+
+  /**
    * Connect to the WebSocket server
    * @returns {Promise<void>}
    */

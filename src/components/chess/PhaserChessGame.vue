@@ -428,11 +428,13 @@ function createBoard() {
         .setDisplaySize(squareSize, squareSize)
         .setInteractive()
       
-      square.row = row
-      square.col = col
+      square.visualRow = visualRow
+      square.visualCol = visualCol
       
       square.on('pointerdown', () => {
-        handleSquareClick(row, col)
+        const clickedRow = isFlipped.value ? 7 - square.visualRow : square.visualRow
+        const clickedCol = isFlipped.value ? 7 - square.visualCol : square.visualCol
+        handleSquareClick(clickedRow, clickedCol)
       })
     }
   }

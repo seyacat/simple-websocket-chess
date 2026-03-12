@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="connection-panel">
     <div class="panel-header">
       <h3>Conexión del Juego</h3>

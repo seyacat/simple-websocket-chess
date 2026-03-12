@@ -1,4 +1,5 @@
 # Ajedrez con WebSocket y Phaser
+**URL del juego:** [https://seyacat.github.io/simple-websocket-chess/](https://seyacat.github.io/simple-websocket-chess/)
 
 Un juego de ajedrez multijugador en tiempo real que utiliza WebSocket para la comunicación y Phaser para el renderizado del tablero.
 
