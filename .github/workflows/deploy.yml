@@ -41,7 +41,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_WS_URL: ${{ secrets.VITE_WS_URL }}
+          VITE_WS_URL: ${{ vars.VITE_WS_URL }}
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
