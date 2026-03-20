@@ -46,6 +46,231 @@ export class WebSocketProxyClient {
     this.handleMessage = this.handleMessage.bind(this);
     this.handleClose = this.handleClose.bind(this);
     this.handleError = this.handleError.bind(this);
+
+    // Channel data generation - initialize or load keys
+    this.keysInitialized = false;
+    this.keysInitializationPromise = this.initializeKeys();
+  }
+
+  /**
+   * Ensure cryptographic keys are initialized
+   * @returns {Promise<void>}
+   */
+  async ensureKeysInitialized() {
+    if (!this.keysInitialized) {
+      await this.keysInitializationPromise;
+      this.keysInitialized = true;
+    }
+  }
+
+  /**
+   * Initialize cryptographic keys
+   * Generates or loads ECDSA key pair from localStorage
+   */
+  async initializeKeys() {
+    const storageKey = 'websocket_proxy_crypto_keys';
+    
+    try {
+      // Try to load existing keys from localStorage
+      const savedKeys = localStorage.getItem(storageKey);
+      
+      if (savedKeys) {
+        const keys = JSON.parse(savedKeys);
+        this.privateKey = await this.importPrivateKey(keys.privateKey);
+        this.publicKey = keys.publicKey;
+      } else {
+        // Generate new key pair
+        await this.generateKeyPair();
+      }
+    } catch (error) {
+      // Fallback to mock keys if crypto API fails
+      this.publicKey = this.generateFallbackPublicKey();
+      this.privateKey = null;
+    }
+  }
+
+  /**
+   * Generate ECDSA key pair using Web Crypto API
+   */
+  async generateKeyPair() {
+    try {
+      // Generate ECDSA key pair with P-256 curve
+      const keyPair = await crypto.subtle.generateKey(
+        {
+          name: 'ECDSA',
+          namedCurve: 'P-256'
+        },
+        true, // extractable
+        ['sign', 'verify']
+      );
+
+      // Export both keys as JWK
+      const privateKeyJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+      const publicKeyJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+
+      // Store keys
+      this.privateKey = keyPair.privateKey;
+      this.publicKey = publicKeyJwk;
+
+      // Save to localStorage
+      const storageKey = 'websocket_proxy_crypto_keys';
+      const keysToSave = {
+        privateKey: privateKeyJwk,
+        publicKey: publicKeyJwk
+      };
+      localStorage.setItem(storageKey, JSON.stringify(keysToSave));
+
+    } catch (error) {
+      console.error('Error generando par de claves:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Import private key from JWK format
+   * @param {Object} jwk Private key in JWK format
+   * @returns {CryptoKey} Imported private key
+   */
+  async importPrivateKey(jwk) {
+    return await crypto.subtle.importKey(
+      'jwk',
+      jwk,
+      {
+        name: 'ECDSA',
+        namedCurve: 'P-256'
+      },
+      true,
+      ['sign']
+    );
+  }
+
+  /**
+   * Generate fallback public key (for environments without Web Crypto API)
+   * @returns {string} Fallback public key
+   */
+  generateFallbackPublicKey() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let result = 'FALLBACK-';
+    for (let i = 0; i < 40; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    result += '==';
+    return result;
+  }
+
+  /**
+   * Convert ArrayBuffer to base64 string
+   * @param {ArrayBuffer} buffer
+   * @returns {string} Base64 encoded string
+   */
+  arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  /**
+   * Sign channel data using ECDSA
+   * @param {Object} data Channel data object
+   * @returns {Promise<string>} Base64 encoded signature
+   */
+  async signData(data) {
+    // If no private key (fallback mode), return mock signature
+    if (!this.privateKey) {
+      return this.generateFallbackSignature(data);
+    }
+
+    try {
+      // Use canonical JSON stringify (sorted keys) for consistent signing
+      const dataStr = this.canonicalStringify(data);
+      
+      const encoder = new TextEncoder();
+      const dataBuffer = encoder.encode(dataStr);
+
+      // Sign the data
+      const signatureBuffer = await crypto.subtle.sign(
+        {
+          name: 'ECDSA',
+          hash: { name: 'SHA-256' }
+        },
+        this.privateKey,
+        dataBuffer
+      );
+
+      // Convert to base64
+      const signature = this.arrayBufferToBase64(signatureBuffer);
+      return signature;
+    } catch (error) {
+      return this.generateFallbackSignature(data);
+    }
+  }
+
+  /**
+   * Stringify object with sorted keys for canonical representation
+   * @param {Object} obj Object to stringify
+   * @returns {string} Canonical JSON string
+   */
+  canonicalStringify(obj) {
+    if (typeof obj !== 'object' || obj === null) {
+      return JSON.stringify(obj);
+    }
+    
+    if (Array.isArray(obj)) {
+      return '[' + obj.map(item => this.canonicalStringify(item)).join(',') + ']';
+    }
+    
+    // Object: sort keys
+    const sortedKeys = Object.keys(obj).sort();
+    const keyValuePairs = sortedKeys.map(key => {
+      return JSON.stringify(key) + ':' + this.canonicalStringify(obj[key]);
+    });
+    
+    return '{' + keyValuePairs.join(',') + '}';
+  }
+
+  /**
+   * Generate fallback signature (for environments without Web Crypto API)
+   * @param {Object} data Channel data object
+   * @returns {string} Fallback signature
+   */
+  generateFallbackSignature(data) {
+    const dataStr = JSON.stringify(data);
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let result = 'FALLBACK-SIG-';
+    for (let i = 0; i < 40; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    result += '==';
+    return result;
+  }
+
+  /**
+   * Create channel object in the new format
+   * @param {string} channelName Channel name
+   * @param {Object} extraData Additional data to include
+   * @returns {Promise<Object>} Channel object in new format
+   */
+  async createChannelObject(channelName, extraData = {}) {
+    // Convert JWK to string for transmission
+    const publicKeyStr = typeof this.publicKey === 'object'
+      ? JSON.stringify(this.publicKey)
+      : this.publicKey;
+
+    const data = {
+      name: channelName,
+      publickey: publicKeyStr,
+      ...extraData
+    };
+
+    const signature = await this.signData(data);
+
+    return {
+      data,
+      signature
+    };
   }
 
   /**
@@ -57,7 +282,6 @@ export class WebSocketProxyClient {
       ...this.config,
       ...options
     };
-    console.log('WebSocket config updated:', this.config);
   }
 
   /**
@@ -67,7 +291,6 @@ export class WebSocketProxyClient {
   connect() {
     return new Promise((resolve, reject) => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        console.log('WebSocket already connected');
         resolve();
         return;
       }
@@ -76,8 +299,6 @@ export class WebSocketProxyClient {
         this.ws.close();
         this.ws = null;
       }
-
-      console.log(`Connecting to WebSocket: ${this.config.url}`);
 
       try {
         this.ws = new WebSocket(this.config.url);
@@ -97,7 +318,6 @@ export class WebSocketProxyClient {
         this.ws.onclose = this.handleClose;
 
       } catch (error) {
-        console.error('Error creating WebSocket:', error);
         reject(error);
       }
     });
@@ -108,7 +328,6 @@ export class WebSocketProxyClient {
    * @param {Event} event 
    */
   handleOpen(event) {
-    console.log('WebSocket connected');
     this._isConnected = true;
     this.reconnectAttempts = 0;
 
@@ -124,7 +343,6 @@ export class WebSocketProxyClient {
       const data = JSON.parse(event.data);
       this.processMessage(data);
     } catch (error) {
-      console.error('Error parsing WebSocket message:', error, event.data);
       this.emit('error', { type: 'parse_error', error: error.message, data: event.data });
     }
   }
@@ -162,7 +380,6 @@ export class WebSocketProxyClient {
         this.handleErrorResponse(rest);
         break;
       default:
-        console.log('Unhandled message type:', type, rest);
         this.emit('unknown_message', { type, ...rest });
     }
   }
@@ -173,7 +390,6 @@ export class WebSocketProxyClient {
    */
   handleConnected(data) {
     this.token = data.token;
-    console.log(`Connected to server. Token: ${this.token}`);
     
     this.emit('token_assigned', this.token);
   }
@@ -206,7 +422,6 @@ export class WebSocketProxyClient {
       // Not JSON, treat as plain text
     }
 
-    console.log(`Message from ${from}: ${message.substring(0, 60)}`);
     this.emit('message', from, message, timestamp, parsedMessage);
   }
 
@@ -339,11 +554,9 @@ export class WebSocketProxyClient {
     }
     
     this.reconnectAttempts++;
-    console.log(`Reconnection attempt ${this.reconnectAttempts}/${this.config.maxReconnectAttempts} in ${this.config.reconnectDelay}ms`);
     
     this.reconnectTimer = setTimeout(() => {
       this.connect().catch(error => {
-        console.error('Reconnection failed:', error);
         this.attemptReconnection();
       });
     }, this.config.reconnectDelay);
@@ -425,10 +638,8 @@ export class WebSocketProxyClient {
       
       try {
         this.ws.send(JSON.stringify(payload));
-        console.log(`Disconnect request sent to ${target}`);
         resolve();
       } catch (error) {
-        console.error('Error sending disconnect request:', error);
         reject(error);
       }
     });
@@ -436,11 +647,12 @@ export class WebSocketProxyClient {
 
   /**
    * Publish to a public channel
-   * @param {string} channel Channel name
+   * @param {string|Object} channel Channel name or channel object in new format
+   * @param {Object} extraData Additional data to include in channel data
    * @returns {Promise<void>}
    */
-  publish(channel) {
-    return new Promise((resolve, reject) => {
+  async publish(channel, extraData = {}) {
+    return new Promise(async (resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket not connected'));
         return;
@@ -451,17 +663,31 @@ export class WebSocketProxyClient {
         return;
       }
       
-      const payload = {
-        type: 'publish',
-        channel: channel
-      };
-      
       try {
+        // Ensure keys are initialized
+        await this.ensureKeysInitialized();
+        
+        // Determine channel format
+        let channelObject;
+        if (typeof channel === 'string') {
+          // Backward compatibility: convert string to new format
+          channelObject = await this.createChannelObject(channel, extraData);
+        } else if (channel && typeof channel === 'object') {
+          // Already in new format
+          channelObject = channel;
+        } else {
+          reject(new Error('Invalid channel parameter'));
+          return;
+        }
+        
+        const payload = {
+          type: 'publish',
+          channel: channelObject
+        };
+        
         this.ws.send(JSON.stringify(payload));
-        console.log(`Published to channel: ${channel}`);
         resolve();
       } catch (error) {
-        console.error('Error publishing to channel:', error);
         reject(error);
       }
     });
@@ -469,11 +695,11 @@ export class WebSocketProxyClient {
 
   /**
    * Unpublish from a public channel
-   * @param {string} channel Channel name
+   * @param {string|Object} channel Channel name or channel object in new format
    * @returns {Promise<void>}
    */
-  unpublish(channel) {
-    return new Promise((resolve, reject) => {
+  async unpublish(channel) {
+    return new Promise(async (resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket not connected'));
         return;
@@ -484,17 +710,31 @@ export class WebSocketProxyClient {
         return;
       }
       
-      const payload = {
-        type: 'unpublish',
-        channel: channel
-      };
-      
       try {
+        // Ensure keys are initialized
+        await this.ensureKeysInitialized();
+        
+        // Determine channel format
+        let channelObject;
+        if (typeof channel === 'string') {
+          // Backward compatibility: convert string to new format
+          channelObject = await this.createChannelObject(channel);
+        } else if (channel && typeof channel === 'object') {
+          // Already in new format
+          channelObject = channel;
+        } else {
+          reject(new Error('Invalid channel parameter'));
+          return;
+        }
+        
+        const payload = {
+          type: 'unpublish',
+          channel: channelObject
+        };
+        
         this.ws.send(JSON.stringify(payload));
-        console.log(`Unpublished from channel: ${channel}`);
         resolve();
       } catch (error) {
-        console.error('Error unpublishing from channel:', error);
         reject(error);
       }
     });
@@ -502,44 +742,60 @@ export class WebSocketProxyClient {
 
   /**
    * List tokens in a public channel
-   * @param {string} channel Channel name
+   * @param {string|Object} channel Channel name or channel object in new format
    * @returns {Promise<string[]>} Array of tokens in the channel
    */
-  listChannel(channel) {
-    return new Promise((resolve, reject) => {
+  async listChannel(channel) {
+    return new Promise(async (resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket not connected'));
         return;
       }
       
-      const payload = {
-        type: 'list',
-        channel: channel
-      };
-      
-      // Set up one-time handler for the response
-      // emit('channel_updated', channel, tokens, count, timestamp) → args son separados
-      const handler = (updatedChannel, tokens) => {
-        if (updatedChannel === channel) {
-          this.off('channel_updated', handler);
-          resolve(tokens || []);
-        }
-      };
-      
-      this.on('channel_updated', handler);
-      
-      // Set timeout for response
-      setTimeout(() => {
-        this.off('channel_updated', handler);
-        reject(new Error(`Timeout waiting for channel list: ${channel}`));
-      }, 5000);
-      
       try {
+        // Ensure keys are initialized
+        await this.ensureKeysInitialized();
+        
+        // Determine channel format
+        let channelObject;
+        let channelName;
+        if (typeof channel === 'string') {
+          // Backward compatibility: convert string to new format
+          channelObject = await this.createChannelObject(channel);
+          channelName = channel;
+        } else if (channel && typeof channel === 'object') {
+          // Already in new format
+          channelObject = channel;
+          channelName = channel.data.name;
+        } else {
+          reject(new Error('Invalid channel parameter'));
+          return;
+        }
+        
+        const payload = {
+          type: 'list',
+          channel: channelObject
+        };
+        
+        // Set up one-time handler for the response
+        // emit('channel_updated', channel, tokens, count, timestamp) → args son separados
+        const handler = (updatedChannel, tokens) => {
+          if (updatedChannel === channelName) {
+            this.off('channel_updated', handler);
+            resolve(tokens || []);
+          }
+        };
+        
+        this.on('channel_updated', handler);
+        
+        // Set timeout for response
+        setTimeout(() => {
+          this.off('channel_updated', handler);
+          reject(new Error(`Timeout waiting for channel list: ${channelName}`));
+        }, 5000);
+        
         this.ws.send(JSON.stringify(payload));
-        console.log(`Requested list for channel: ${channel}`);
       } catch (error) {
-        this.off('channel_updated', handler);
-        console.error('Error requesting channel list:', error);
         reject(error);
       }
     });
@@ -567,8 +823,6 @@ export class WebSocketProxyClient {
     this.reconnectAttempts = 0;
     this.activeConnections.clear();
     this.channelSubscriptions.clear();
-    
-    console.log('Disconnected from server');
   }
 
   /**

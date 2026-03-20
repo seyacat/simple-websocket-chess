@@ -176,8 +176,16 @@ export const useConnectionStore = defineStore('connection', () => {
     }
     
     try {
-      await wsProxyClient.publish('chess_hosts')
-      console.log('Host publicado en canal chess_hosts')
+      // Include additional data about the chess host
+      const extraData = {
+        gameType: 'chess',
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        hostToken: token.value
+      };
+      
+      await wsProxyClient.publish('chess_hosts', extraData)
+      console.log('Host publicado en canal chess_hosts con datos adicionales')
       return true
     } catch (error) {
       console.error('Error publicando en canal chess_hosts:', error)
