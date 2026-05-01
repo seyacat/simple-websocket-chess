@@ -13,7 +13,7 @@ export class WebSocketProxyClient {
   /**
    * Create a new WebSocketProxyClient instance
    * @param {Object} options Configuration options
-   * @param {string} options.url WebSocket server URL (default: 'ws://localhost:4001')
+   * @param {string} options.url WebSocket server URL (default: 'wss://proxy.closer.click')
    * @param {boolean} options.autoReconnect Enable auto-reconnection (default: true)
    * @param {number} options.maxReconnectAttempts Maximum reconnection attempts (default: 5)
    * @param {number} options.reconnectDelay Delay between reconnection attempts in ms (default: 3000)
@@ -21,7 +21,7 @@ export class WebSocketProxyClient {
   constructor(options = {}) {
     // Configuration
     this.config = {
-      url: options.url || 'ws://localhost:4001',
+      url: options.url || 'wss://proxy.closer.click',
       autoReconnect: options.autoReconnect !== false,
       maxReconnectAttempts: options.maxReconnectAttempts || 5,
       reconnectDelay: options.reconnectDelay || 3000
@@ -375,6 +375,12 @@ export class WebSocketProxyClient {
         break;
       case 'channel_list':
         this.handleChannelList(rest);
+        break;
+      case 'joined':
+        this.emit('channel_joined', rest.channel, rest.token, rest.timestamp);
+        break;
+      case 'left':
+        this.emit('channel_left', rest.channel, rest.token, rest.timestamp);
         break;
       case 'error':
         this.handleErrorResponse(rest);

@@ -2,7 +2,7 @@
  * Test script for WebSocketProxyClient
  * 
  * Run this test to verify the WebSocket proxy client library works correctly.
- * Make sure the proxy server is running on ws://localhost:4001
+ * Make sure the proxy server is running on wss://proxy.closer.click
  */
 
 import { WebSocketProxyClient } from '../services/WebSocketProxyClient.js';
@@ -11,7 +11,7 @@ console.log('=== WebSocketProxyClient Test ===\n');
 
 // Create client instance
 const client = new WebSocketProxyClient({
-  url: 'ws://localhost:4001',
+  url: 'wss://proxy.closer.click',
   autoReconnect: true,
   maxReconnectAttempts: 3,
   reconnectDelay: 2000
@@ -132,7 +132,7 @@ async function runTests() {
 }
 
 // Check if server is running
-console.log('Note: Make sure the WebSocket proxy server is running on ws://localhost:4001');
+console.log('Note: Make sure the WebSocket proxy server is running on wss://proxy.closer.click');
 console.log('Run: cd ../simple-websocket-proxy && node server.js\n');
 
 // Run tests after a short delay

@@ -195,7 +195,9 @@ const clearError = () => {
 
 const startAutoRefresh = () => {
   // Refrescar cada X segundos (por defecto 20000 ms = 20 segundos)
-  const refreshIntervalMs = parseInt(import.meta.env.VITE_WS_LOBBY_REFRESH_INTERVAL) || 20000
+  // Updates en tiempo real (joined/left/peer_disconnected) ya mantienen la lista al día.
+  // Este poll es solo respaldo por si se pierde algún evento.
+  const refreshIntervalMs = parseInt(import.meta.env.VITE_WS_LOBBY_REFRESH_INTERVAL) || 60000
   refreshInterval.value = setInterval(() => {
     if (!isRefreshing.value && connectionStore.isConnected) {
       refreshPublicHosts()

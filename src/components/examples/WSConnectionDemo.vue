@@ -53,7 +53,7 @@ export default {
   },
   mounted() {
     this.client = getWebSocketProxyClient({
-      url: 'ws://localhost:4001',
+      url: 'wss://proxy.closer.click',
       autoReconnect: true,
       maxReconnectAttempts: 3,
       reconnectDelay: 2000

@@ -39,7 +39,7 @@ npm install
 ### Variables de Entorno
 Crea un archivo `.env` basado en `.env.example`:
 ```env
-VITE_WS_URL=wss://closer.click:4000
+VITE_WS_URL=wss://proxy.closer.click
 VITE_WS_RECONNECT_DELAY=3000
 VITE_WS_MAX_RECONNECT_ATTEMPTS=5
 VITE_GAME_NAME=simple-chess

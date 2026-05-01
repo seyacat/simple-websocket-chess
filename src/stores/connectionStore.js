@@ -8,7 +8,7 @@ export const useConnectionStore = defineStore('connection', () => {
   const token = ref(null) // Token asignado por el proxy (4 caracteres)
   const isConnected = ref(false)
   const connectionError = ref(null)
-  const wsUrl = ref(import.meta.env.VITE_WS_URL || 'ws://localhost:4001')
+  const wsUrl = ref(import.meta.env.VITE_WS_URL || 'wss://proxy.closer.click')
   
   // Estado para protocolo de lobby con proxy
   const mode = ref(null) // null, 'host', 'guest'
@@ -337,6 +337,33 @@ export const useConnectionStore = defineStore('connection', () => {
       if (channel === 'chess_hosts') {
         console.log(`Canal chess_hosts actualizado: ${count} hosts`)
         setPublicHosts(tokens)
+        updateLastPublicHostsUpdate()
+      }
+    })
+
+    // Notificación en tiempo real: alguien publicó en el canal
+    wsProxyClient.on('channel_joined', (channel, joinedToken) => {
+      if (channel !== 'chess_hosts') return
+      if (joinedToken === token.value) return
+      if (!publicHosts.value.includes(joinedToken)) {
+        publicHosts.value = [...publicHosts.value, joinedToken]
+        updateLastPublicHostsUpdate()
+      }
+    })
+
+    // Notificación en tiempo real: alguien se despublicó del canal
+    wsProxyClient.on('channel_left', (channel, leftToken) => {
+      if (channel !== 'chess_hosts') return
+      if (publicHosts.value.includes(leftToken)) {
+        publicHosts.value = publicHosts.value.filter(t => t !== leftToken)
+        updateLastPublicHostsUpdate()
+      }
+    })
+
+    // Peer desconectado: si era host público, quitarlo del lobby
+    wsProxyClient.on('peer_disconnected', (peerToken) => {
+      if (publicHosts.value.includes(peerToken)) {
+        publicHosts.value = publicHosts.value.filter(t => t !== peerToken)
         updateLastPublicHostsUpdate()
       }
     })
