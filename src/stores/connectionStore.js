@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { getWebSocketProxyClient } from '@/services/WebSocketProxyClient'
+import { getWebSocketProxyClient } from '@gatoseya/closer-click-proxy-client'
 
 export const useConnectionStore = defineStore('connection', () => {
   // Estado de conexión WebSocketProxyClient
@@ -297,7 +297,7 @@ export const useConnectionStore = defineStore('connection', () => {
     handlersSetup = true
     
     // Token asignado al conectar
-    wsProxyClient.on('token_assigned', (assignedToken) => {
+    wsProxyClient.on('token', (assignedToken) => {
       console.log('Token asignado por proxy:', assignedToken)
       token.value = assignedToken
     })
@@ -332,14 +332,8 @@ export const useConnectionStore = defineStore('connection', () => {
       // Este store no necesita loguear cada mensaje
     })
     
-    // Channel updated (lista de hosts públicos)
-    wsProxyClient.on('channel_updated', (channel, tokens, count, timestamp) => {
-      if (channel === 'chess_hosts') {
-        console.log(`Canal chess_hosts actualizado: ${count} hosts`)
-        setPublicHosts(tokens)
-        updateLastPublicHostsUpdate()
-      }
-    })
+    // (channel_updated ya no se emite: list() devuelve los tokens directamente.
+    //  El estado de publicHosts se mantiene vía joined/left/peer_disconnected.)
 
     // Notificación en tiempo real: alguien publicó en el canal
     wsProxyClient.on('channel_joined', (channel, joinedToken) => {

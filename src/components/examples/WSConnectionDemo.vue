@@ -37,7 +37,7 @@
 </template>
 
 <script>
-import { getWebSocketProxyClient } from '@/services/WebSocketProxyClient.js'
+import { getWebSocketProxyClient } from '@gatoseya/closer-click-proxy-client'
 
 export default {
   name: 'WSConnectionDemo',

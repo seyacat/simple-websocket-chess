@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@gatoseya/closer-click-proxy-client": "^0.1.1",
     "phaser": "^3.90.0",
     "pinia": "^3.0.4",
     "uuid": "^13.0.0",
