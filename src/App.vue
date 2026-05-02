@@ -43,7 +43,12 @@ const opponentInfo = computed(() => {
   const t = opponentToken.value
   if (!t) return null
   const id = connectionStore.peerIdentities.get(t)
-  return { token: t, pubkey: id?.pubkey || null, peer: id?.peer || null }
+  return {
+    token: t,
+    pubkey: id?.pubkey || null,
+    peer: id?.peer || null,
+    announcedNickname: id?.announcedNickname || null
+  }
 })
 const opponentRating = computed(() => {
   return computeDerivedRating(opponentInfo.value?.peer, connectionStore.trustMap)
@@ -235,7 +240,7 @@ onMounted(() => {
 
         <div v-if="opponentInfo" class="status-item">
           <button class="opponent-button" @click="openOpponentRating">
-            Oponente: {{ opponentInfo.peer?.nickname || opponentInfo.token }}
+            Oponente: {{ opponentInfo.peer?.nickname || opponentInfo.announcedNickname || opponentInfo.token }}
             <span
               v-if="opponentRating.value != null"
               class="rating-badge"

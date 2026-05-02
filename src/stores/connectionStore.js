@@ -426,7 +426,10 @@ export const useConnectionStore = defineStore('connection', () => {
     if (!id || !payload?.nonce) return
     try {
       const response = await id.signChallenge(payload.nonce)
-      await wsProxyClient.send([fromToken], formatProxyMessage('IDENTIFY_RESPONSE', response))
+      // Anunciar también el nickname propio (no firmado: es el reclamo del peer
+      // sobre cómo le gustaría ser visto, sirve como fallback de UI).
+      const enriched = { ...response, nickname: myNickname.value || null }
+      await wsProxyClient.send([fromToken], formatProxyMessage('IDENTIFY_RESPONSE', enriched))
     } catch (e) { console.warn('signChallenge failed:', e) }
   }
 
@@ -436,10 +439,15 @@ export const useConnectionStore = defineStore('connection', () => {
     try {
       const result = await id.verifyResponse(payload)
       if (!result.ok) return
-      peerIdentities.value.set(fromToken, { pubkey: result.publickey, peer: result.peer || null })
-      // Invalidate cache so Vue reacts
+      const announcedNickname = typeof payload.nickname === 'string' && payload.nickname.trim()
+        ? payload.nickname.trim().slice(0, 40)
+        : null
+      peerIdentities.value.set(fromToken, {
+        pubkey: result.publickey,
+        peer: result.peer || null,
+        announcedNickname
+      })
       peerIdentities.value = new Map(peerIdentities.value)
-      // Pedir endorsements al resto de peers conocidos en chess
       requestRatingsForSubject(result.publickey, fromToken)
     } catch (e) { console.warn('verifyResponse failed:', e) }
   }
@@ -480,11 +488,15 @@ export const useConnectionStore = defineStore('connection', () => {
       for (const e of payload.endorsements) if (e && e.subject === payload.subject) all.push(e)
       if (all.length === 0) return
       await id.mergeEndorsements(payload.subject, all, askerPubkey)
-      // Refrescar el peer afectado en la cache
+      // Refrescar el peer afectado en la cache, conservando announcedNickname
       const peer = await id.getPeer(payload.subject)
       for (const [t, info] of peerIdentities.value) {
         if (info.pubkey === payload.subject) {
-          peerIdentities.value.set(t, { pubkey: info.pubkey, peer })
+          peerIdentities.value.set(t, {
+            pubkey: info.pubkey,
+            peer,
+            announcedNickname: info.announcedNickname || null
+          })
         }
       }
       peerIdentities.value = new Map(peerIdentities.value)
@@ -514,7 +526,13 @@ export const useConnectionStore = defineStore('connection', () => {
     if (!id) throw new Error('Identity vault not available')
     const updated = await id.setRating(pubkey, rating, notes)
     for (const [t, info] of peerIdentities.value) {
-      if (info.pubkey === pubkey) peerIdentities.value.set(t, { pubkey, peer: updated })
+      if (info.pubkey === pubkey) {
+        peerIdentities.value.set(t, {
+          pubkey,
+          peer: updated,
+          announcedNickname: info.announcedNickname || null
+        })
+      }
     }
     peerIdentities.value = new Map(peerIdentities.value)
     await refreshIdentity()
@@ -526,7 +544,13 @@ export const useConnectionStore = defineStore('connection', () => {
     if (!id) throw new Error('Identity vault not available')
     const updated = await id.setNickname(pubkey, nickname)
     for (const [t, info] of peerIdentities.value) {
-      if (info.pubkey === pubkey) peerIdentities.value.set(t, { pubkey, peer: updated })
+      if (info.pubkey === pubkey) {
+        peerIdentities.value.set(t, {
+          pubkey,
+          peer: updated,
+          announcedNickname: info.announcedNickname || null
+        })
+      }
     }
     peerIdentities.value = new Map(peerIdentities.value)
     return updated

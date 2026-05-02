@@ -203,7 +203,7 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
     const seatRequestData = {
       color,
       playerToken: connectionStore.token,
-      playerName: connectionStore.token || `Jugador ${color}`,
+      playerName: connectionStore.myNickname || connectionStore.token || `Jugador ${color}`,
       timestamp: Date.now()
     }
     

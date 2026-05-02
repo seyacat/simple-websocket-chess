@@ -543,16 +543,17 @@ export const useHostGameStore = defineStore('hostGame', () => {
       vacateSeat(hostAsPlayerColor.value, connectionStore.token)
     }
     
+    const hostName = connectionStore.myNickname || `Host (${color})`
     gameState.value.seats[color].occupied = true
     gameState.value.seats[color].playerToken = connectionStore.token
-    gameState.value.seats[color].playerName = `Host (${color})`
+    gameState.value.seats[color].playerName = hostName
     hostAsPlayerColor.value = color
-    
+
     broadcastGameUpdate(MESSAGE_TYPES.SEATS_UPDATE, {
       seats: gameState.value.seats,
       changedColor: color,
       playerToken: connectionStore.token,
-      playerName: `Host (${color})`
+      playerName: hostName
     })
     
     checkAndStartGame()
