@@ -618,16 +618,34 @@ input:checked + .slider:before {
 }
 
 @media (max-width: 768px) {
+  .lobby-view { padding: 8px; }
+  .lobby-header { margin-bottom: 16px; }
+  .lobby-header h2 { font-size: 1.3rem; }
+
   .lobby-content {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
-  
+  .game-creation-section,
+  .public-hosts-section,
+  .manual-join-section { padding: 14px; }
+
+  .game-creation-section h3,
+  .public-hosts-section h3,
+  .manual-join-section h3 { font-size: 1.05rem; margin-bottom: 12px; }
+
+  .private-game-toggle { gap: 10px; }
+
+  .manual-join-form { flex-direction: column; gap: 8px; }
+  .token-input { width: 100%; box-sizing: border-box; font-size: 16px; }
+  .join-button { width: 100%; padding: 12px; }
+
   .section-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
   }
-  
+
   .host-card {
     flex-direction: column;
     gap: 15px;

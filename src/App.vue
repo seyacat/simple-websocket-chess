@@ -18,9 +18,17 @@ const playerGameStore = usePlayerGameStore()
 
 // Estado local
 const showGameControls = ref(true)
-const boardSize = ref(600)
+const boardSize = ref(computeBoardSize())
 const currentView = ref('lobby') // 'lobby', 'game'
 const isConnecting = ref(false)
+
+function computeBoardSize () {
+  if (typeof window === 'undefined') return 600
+  // En móvil: ancho de pantalla menos 24px de padding total. En desktop: tope 600px.
+  return Math.min(window.innerWidth - 24, 600)
+}
+
+const onResize = () => { boardSize.value = computeBoardSize() }
 
 // Identity / rating UI
 const settingsOpen = ref(false)
@@ -48,6 +56,8 @@ const openOpponentRating = () => {
 
 onMounted(() => {
   connectionStore.refreshIdentity?.()
+  window.addEventListener('resize', onResize)
+  window.addEventListener('orientationchange', onResize)
 })
 
 // Computed
@@ -837,31 +847,48 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .app-container { padding: 0; }
+  .app-header { padding: 12px; }
+  .app-header h1 { font-size: 1.25rem; }
+  .subtitle { font-size: 0.85rem; }
+  .app-main { padding: 0 8px; }
+
   .lobby-container {
     grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 0;
   }
-  
-  .app-header h1 {
-    font-size: 2rem;
-  }
-  
+
   .connection-status-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-start;
   }
-  
-  .status-item {
-    justify-content: space-between;
+  .status-item { font-size: 0.85rem; }
+  .identity-button, .opponent-button {
+    font-size: 0.8rem;
+    padding: 4px 8px;
   }
-  
+  .opponent-button {
+    max-width: 60vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .back-to-lobby-button { padding: 6px 10px; font-size: 0.8rem; }
+
   .board-row {
     grid-template-columns: repeat(8, 30px);
   }
-  
   .board-square {
     width: 30px;
     height: 30px;
+  }
+
+  .phaser-container {
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
   }
 }
 </style>

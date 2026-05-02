@@ -358,8 +358,8 @@ function initializeGame() {
       return
     }
     
-    // Scale down a bit to ensure space for the seat bars
-    const actualSize = Math.min(props.boardSize, 500)
+    // Respeta el tamaño solicitado por el contenedor (responsivo).
+    const actualSize = Math.max(280, Math.min(props.boardSize, 600))
     
     const config = {
       type: Phaser.AUTO,
