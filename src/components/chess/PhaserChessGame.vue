@@ -690,6 +690,23 @@ defineExpose({
   padding: 10px;
 }
 
+@media (max-width: 768px) {
+  .phaser-chess-game {
+    gap: 4px;
+    padding: 0;
+  }
+  .seat-bar {
+    padding: 4px 8px;
+    border-radius: 0;
+    box-shadow: none;
+    max-width: 100%;
+  }
+  .seat-icon { font-size: 18px; }
+  .player-name { font-size: 0.9rem; }
+  .player-indicators { gap: 6px; margin-right: 6px; }
+  .player-timer { font-size: 0.85rem; }
+}
+
 .seat-bar {
   display: flex;
   justify-content: center;

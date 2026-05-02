@@ -848,26 +848,33 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .app-container { padding: 0; }
-  .app-header { padding: 12px; }
-  .app-header h1 { font-size: 1.25rem; }
-  .subtitle { font-size: 0.85rem; }
-  .app-main { padding: 0 8px; }
+  .app-header {
+    padding: 6px 8px;
+    margin-bottom: 0;
+    text-align: left;
+  }
+  .app-header h1 { font-size: 1rem; margin: 0; text-shadow: none; }
+  .subtitle { display: none; }
+  .app-main { padding: 0; max-width: 100%; }
 
   .lobby-container {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 8px;
     padding: 0;
   }
+  .connection-status-panel { padding: 8px; }
 
   .connection-status-bar {
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     justify-content: flex-start;
+    margin-top: 4px;
   }
-  .status-item { font-size: 0.85rem; }
+  .status-item { font-size: 0.78rem; gap: 4px; }
+  .status-label { font-size: 0.75rem; }
   .identity-button, .opponent-button {
-    font-size: 0.8rem;
-    padding: 4px 8px;
+    font-size: 0.78rem;
+    padding: 3px 7px;
   }
   .opponent-button {
     max-width: 60vw;
@@ -875,7 +882,26 @@ onMounted(() => {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .back-to-lobby-button { padding: 6px 10px; font-size: 0.8rem; }
+  .back-to-lobby-button { padding: 4px 8px; font-size: 0.75rem; }
+
+  /* En vista de juego: sin paddings, tablero al top, panel debajo */
+  .game-container {
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .game-area {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .phaser-container {
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 0;
+    background: transparent;
+  }
 
   .board-row {
     grid-template-columns: repeat(8, 30px);
@@ -883,12 +909,6 @@ onMounted(() => {
   .board-square {
     width: 30px;
     height: 30px;
-  }
-
-  .phaser-container {
-    min-height: 0;
-    width: 100%;
-    overflow: hidden;
   }
 }
 </style>
