@@ -1,6 +1,31 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getWebSocketProxyClient } from '@gatoseya/closer-click-proxy-client'
+import { Identity } from '@gatoseya/closer-click-identity'
+
+let _identity = null
+async function getIdentity () {
+  if (_identity) return _identity
+  try {
+    _identity = await Identity.connect()
+  } catch (e) {
+    console.warn('Identity vault unreachable, identity features disabled:', e)
+    _identity = null
+  }
+  return _identity
+}
+
+function formatProxyMessage (type, payload) {
+  return `${type}|${JSON.stringify(payload || {})}`
+}
+function parseProxyMessage (raw) {
+  if (typeof raw !== 'string') return { type: null, payload: null }
+  const i = raw.indexOf('|')
+  if (i === -1) return { type: null, payload: null }
+  const type = raw.slice(0, i)
+  try { return { type, payload: JSON.parse(raw.slice(i + 1)) } }
+  catch { return { type: null, payload: null } }
+}
 
 export const useConnectionStore = defineStore('connection', () => {
   // Estado de conexión WebSocketProxyClient
@@ -17,6 +42,12 @@ export const useConnectionStore = defineStore('connection', () => {
   const subscribedHost = ref(null) // token del host suscrito (para guests)
   const subscribers = ref([]) // lista de tokens de guests (para hosts)
   const lastPublicHostsUpdate = ref(null)
+
+  // Identity / web-of-trust
+  const peerIdentities = ref(new Map()) // Map<token, { pubkey, peer }>
+  const trustMap = ref(new Map())       // Map<pubkey, my rating 0-5>
+  const myPubkey = ref(null)
+  const myNickname = ref(localStorage.getItem('chess_nickname') || '')
   
   // Mapeo de localId a token para comunicación transparente
   const localIdToTokenMap = ref(new Map())
@@ -120,12 +151,18 @@ export const useConnectionStore = defineStore('connection', () => {
 
   const setSubscribedHost = (hostToken) => {
     subscribedHost.value = hostToken
+    if (hostToken) {
+      peerIdentities.value.set(hostToken, peerIdentities.value.get(hostToken) || { pubkey: null, peer: null })
+      challengePeer(hostToken)
+    }
   }
 
   const addSubscriber = (guestToken) => {
     if (!subscribers.value.includes(guestToken)) {
       subscribers.value.push(guestToken)
     }
+    peerIdentities.value.set(guestToken, peerIdentities.value.get(guestToken) || { pubkey: null, peer: null })
+    challengePeer(guestToken)
   }
 
   const removeSubscriber = (guestToken) => {
@@ -326,10 +363,19 @@ export const useConnectionStore = defineStore('connection', () => {
       setError(`Error WebSocket: ${errorData.error || 'Desconocido'}`)
     })
     
-    // Mensaje recibido
-    wsProxyClient.on('message', (fromToken, message, timestamp, parsedMessage) => {
-      // Los mensajes específicos del juego son manejados por los stores de juego
-      // Este store no necesita loguear cada mensaje
+    // Mensaje recibido — interceptar protocolo de identidad/reputación
+    wsProxyClient.on('message', async (fromToken, message, timestamp, parsedMessage) => {
+      // Mensajes JSON puros (no del protocolo TYPE|payload) los ignoramos aquí
+      if (typeof message !== 'string') return
+      const { type, payload } = parseProxyMessage(message)
+      if (!type) return
+      switch (type) {
+        case 'IDENTIFY_CHALLENGE': await handleIdentifyChallenge(fromToken, payload); break
+        case 'IDENTIFY_RESPONSE': await handleIdentifyResponse(fromToken, payload); break
+        case 'RATING_QUERY': await handleRatingQuery(fromToken, payload); break
+        case 'RATING_REPLY': await handleRatingReply(fromToken, payload); break
+        // Otros tipos los manejan game stores
+      }
     })
     
     // (channel_updated ya no se emite: list() devuelve los tokens directamente.
@@ -360,7 +406,140 @@ export const useConnectionStore = defineStore('connection', () => {
         publicHosts.value = publicHosts.value.filter(t => t !== peerToken)
         updateLastPublicHostsUpdate()
       }
+      peerIdentities.value.delete(peerToken)
     })
+  }
+
+  // ---- Identity handshake ------------------------------------------------
+
+  const challengePeer = async (peerToken) => {
+    const id = await getIdentity()
+    if (!id || !peerToken || peerToken === token.value) return
+    try {
+      const { nonce } = await id.makeChallenge()
+      await wsProxyClient.send([peerToken], formatProxyMessage('IDENTIFY_CHALLENGE', { nonce }))
+    } catch (e) { console.warn('challengePeer failed:', e) }
+  }
+
+  const handleIdentifyChallenge = async (fromToken, payload) => {
+    const id = await getIdentity()
+    if (!id || !payload?.nonce) return
+    try {
+      const response = await id.signChallenge(payload.nonce)
+      await wsProxyClient.send([fromToken], formatProxyMessage('IDENTIFY_RESPONSE', response))
+    } catch (e) { console.warn('signChallenge failed:', e) }
+  }
+
+  const handleIdentifyResponse = async (fromToken, payload) => {
+    const id = await getIdentity()
+    if (!id || !payload?.publickey) return
+    try {
+      const result = await id.verifyResponse(payload)
+      if (!result.ok) return
+      peerIdentities.value.set(fromToken, { pubkey: result.publickey, peer: result.peer || null })
+      // Invalidate cache so Vue reacts
+      peerIdentities.value = new Map(peerIdentities.value)
+      // Pedir endorsements al resto de peers conocidos en chess
+      requestRatingsForSubject(result.publickey, fromToken)
+    } catch (e) { console.warn('verifyResponse failed:', e) }
+  }
+
+  const requestRatingsForSubject = (subjectPubkey, excludeToken) => {
+    if (!subjectPubkey) return
+    const targets = []
+    for (const [t, info] of peerIdentities.value) {
+      if (t === excludeToken) continue
+      if (!info.pubkey) continue
+      targets.push(t)
+    }
+    if (targets.length === 0) return
+    const queryId = crypto.randomUUID()
+    wsProxyClient.send(targets, formatProxyMessage('RATING_QUERY', { queryId, subject: subjectPubkey })).catch(() => {})
+  }
+
+  const handleRatingQuery = async (fromToken, payload) => {
+    const id = await getIdentity()
+    if (!id || !payload?.subject) return
+    const askerPubkey = peerIdentities.value.get(fromToken)?.pubkey || null
+    try {
+      if (askerPubkey) await id.recordQuery(askerPubkey, payload.subject)
+      const { mine, endorsements } = await id.getRatingsForSubject(payload.subject)
+      await wsProxyClient.send([fromToken], formatProxyMessage('RATING_REPLY', {
+        queryId: payload.queryId, subject: payload.subject, mine, endorsements
+      }))
+    } catch (e) { console.warn('handleRatingQuery failed:', e) }
+  }
+
+  const handleRatingReply = async (fromToken, payload) => {
+    const id = await getIdentity()
+    if (!id || !payload?.subject || !Array.isArray(payload?.endorsements)) return
+    const askerPubkey = peerIdentities.value.get(fromToken)?.pubkey || null
+    try {
+      const all = []
+      if (payload.mine && payload.mine.subject === payload.subject) all.push(payload.mine)
+      for (const e of payload.endorsements) if (e && e.subject === payload.subject) all.push(e)
+      if (all.length === 0) return
+      await id.mergeEndorsements(payload.subject, all, askerPubkey)
+      // Refrescar el peer afectado en la cache
+      const peer = await id.getPeer(payload.subject)
+      for (const [t, info] of peerIdentities.value) {
+        if (info.pubkey === payload.subject) {
+          peerIdentities.value.set(t, { pubkey: info.pubkey, peer })
+        }
+      }
+      peerIdentities.value = new Map(peerIdentities.value)
+    } catch (e) { console.warn('handleRatingReply failed:', e) }
+  }
+
+  /** Refrescar mi pubkey y el trustMap. Llamar al iniciar y tras cambiar ratings. */
+  const refreshIdentity = async () => {
+    const id = await getIdentity()
+    if (!id) return
+    myPubkey.value = id.me?.publickey || null
+    if (id.me?.nickname) myNickname.value = id.me.nickname
+    try {
+      const all = await id.listPeers()
+      const next = new Map()
+      for (const p of all) {
+        const r = p?.myRating?.rating
+        if (typeof r === 'number' && r > 0) next.set(p.publickey, r)
+      }
+      trustMap.value = next
+    } catch (_) {}
+  }
+
+  /** Calificar a un peer por pubkey y refrescar trust map. */
+  const ratePeer = async (pubkey, rating, notes) => {
+    const id = await getIdentity()
+    if (!id) throw new Error('Identity vault not available')
+    const updated = await id.setRating(pubkey, rating, notes)
+    for (const [t, info] of peerIdentities.value) {
+      if (info.pubkey === pubkey) peerIdentities.value.set(t, { pubkey, peer: updated })
+    }
+    peerIdentities.value = new Map(peerIdentities.value)
+    await refreshIdentity()
+    return updated
+  }
+
+  const setPeerNickname = async (pubkey, nickname) => {
+    const id = await getIdentity()
+    if (!id) throw new Error('Identity vault not available')
+    const updated = await id.setNickname(pubkey, nickname)
+    for (const [t, info] of peerIdentities.value) {
+      if (info.pubkey === pubkey) peerIdentities.value.set(t, { pubkey, peer: updated })
+    }
+    peerIdentities.value = new Map(peerIdentities.value)
+    return updated
+  }
+
+  const setMyNickname = async (nickname) => {
+    const v = (nickname || '').trim().slice(0, 20)
+    myNickname.value = v
+    localStorage.setItem('chess_nickname', v)
+    const id = await getIdentity()
+    if (id) {
+      try { await id.setMyNickname(v) } catch (_) {}
+    }
   }
 
   // Inicializar cargando estado mínimo (solo modo/visibilidad si existen)
@@ -390,6 +569,16 @@ export const useConnectionStore = defineStore('connection', () => {
     subscribedHost,
     subscribers,
     lastPublicHostsUpdate,
+
+    // Identidad / web of trust
+    peerIdentities,
+    trustMap,
+    myPubkey,
+    myNickname,
+    refreshIdentity,
+    ratePeer,
+    setPeerNickname,
+    setMyNickname,
     
     // Getters
     connectionStatus,

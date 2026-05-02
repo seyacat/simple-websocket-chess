@@ -2,6 +2,9 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import LobbyView from './components/lobby/LobbyView.vue'
 import PhaserChessGame from './components/chess/PhaserChessGame.vue'
+import UserSettingsModal from './components/identity/UserSettingsModal.vue'
+import PeerRatingModal from './components/identity/PeerRatingModal.vue'
+import { computeDerivedRating } from './utils/rating'
 import { useGameStore } from './stores/gameStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useHostGameStore } from '@/stores/hostGameStore'
@@ -18,6 +21,34 @@ const showGameControls = ref(true)
 const boardSize = ref(600)
 const currentView = ref('lobby') // 'lobby', 'game'
 const isConnecting = ref(false)
+
+// Identity / rating UI
+const settingsOpen = ref(false)
+const ratingTarget = ref(null)
+
+const opponentToken = computed(() => {
+  if (connectionStore.isGuest) return connectionStore.subscribedHost
+  if (connectionStore.isHost && connectionStore.subscribers.length > 0) return connectionStore.subscribers[0]
+  return null
+})
+const opponentInfo = computed(() => {
+  const t = opponentToken.value
+  if (!t) return null
+  const id = connectionStore.peerIdentities.get(t)
+  return { token: t, pubkey: id?.pubkey || null, peer: id?.peer || null }
+})
+const opponentRating = computed(() => {
+  return computeDerivedRating(opponentInfo.value?.peer, connectionStore.trustMap)
+})
+
+const openOpponentRating = () => {
+  if (!opponentInfo.value) return
+  ratingTarget.value = opponentInfo.value
+}
+
+onMounted(() => {
+  connectionStore.refreshIdentity?.()
+})
 
 // Computed
 const gameTitle = computed(() => {
@@ -185,7 +216,26 @@ onMounted(() => {
           <span class="status-label">Token:</span>
           <code class="status-value">{{ connectionStore.shortToken }}</code>
         </div>
-        
+
+        <div class="status-item">
+          <button class="identity-button" @click="settingsOpen = true" title="Editar identidad">
+            @{{ connectionStore.myNickname || 'sin nombre' }}
+          </button>
+        </div>
+
+        <div v-if="opponentInfo" class="status-item">
+          <button class="opponent-button" @click="openOpponentRating">
+            Oponente: {{ opponentInfo.peer?.nickname || opponentInfo.token }}
+            <span
+              v-if="opponentRating.value != null"
+              class="rating-badge"
+              :class="{ derived: opponentRating.source === 'derived' }"
+            >
+              ★ {{ opponentRating.value.toFixed(opponentRating.source === 'derived' ? 1 : 0) }}
+            </span>
+          </button>
+        </div>
+
         <div v-if="currentView !== 'lobby'" class="status-item">
           <button
             @click="returnToLobby"
@@ -203,6 +253,9 @@ onMounted(() => {
         </div>
       </div>
     </header>
+
+    <UserSettingsModal :open="settingsOpen" @close="settingsOpen = false" />
+    <PeerRatingModal :info="ratingTarget" @close="ratingTarget = null" />
 
     <main class="app-main">
       <!-- Vista de Lobby -->
@@ -419,6 +472,30 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.3);
   transform: translateY(-2px);
 }
+
+.identity-button, .opponent-button {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--color-text-on-primary);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.identity-button:hover, .opponent-button:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.rating-badge {
+  background: rgba(245, 179, 1, 0.3);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.85em;
+}
+.rating-badge.derived { background: rgba(52, 152, 219, 0.4); }
 
 .app-main {
   max-width: 1400px;
