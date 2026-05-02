@@ -371,7 +371,13 @@ function initializeGame() {
         create: create,
         update: update
       },
-      backgroundColor: '#f0d9b5'
+      backgroundColor: '#f0d9b5',
+      // No bloquear los gestos nativos del navegador: el usuario debe poder
+      // hacer scroll vertical aunque el dedo arranque sobre el canvas.
+      input: {
+        mouse: { preventDefaultDown: false, preventDefaultUp: false, preventDefaultMove: false },
+        touch: { capture: false }
+      }
     }
     
     game.value = new Phaser.Game(config)
@@ -688,6 +694,12 @@ defineExpose({
   height: 100%;
   gap: 15px;
   padding: 10px;
+}
+
+/* Permitir scroll vertical aunque el dedo arranque sobre el canvas Phaser.
+   Los taps siguen funcionando (touch-action solo afecta gestos de pan/zoom). */
+.phaser-chess-game :deep(canvas) {
+  touch-action: pan-y;
 }
 
 @media (max-width: 768px) {
