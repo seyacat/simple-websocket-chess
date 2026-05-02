@@ -318,13 +318,13 @@ export const useConnectionStore = defineStore('connection', () => {
     if (!isConnected.value || !token.value || subscribers.value.length === 0) {
       return
     }
-    
-    // Enviar a todos los subscribers en paralelo (fire-and-forget)
-    // message_sent es solo informativo, no bloqueamos esperando confirmación
+    // wsProxyClient.send es síncrono (lib v0.1.1+); sin .catch
     for (const subscriberToken of subscribers.value) {
-      wsProxyClient.send(subscriberToken, message).catch(error => {
+      try {
+        wsProxyClient.send(subscriberToken, message)
+      } catch (error) {
         console.error(`Error enviando a subscriber ${subscriberToken}:`, error)
-      })
+      }
     }
   }
 
@@ -454,7 +454,7 @@ export const useConnectionStore = defineStore('connection', () => {
     }
     if (targets.length === 0) return
     const queryId = crypto.randomUUID()
-    wsProxyClient.send(targets, formatProxyMessage('RATING_QUERY', { queryId, subject: subjectPubkey })).catch(() => {})
+    try { wsProxyClient.send(targets, formatProxyMessage('RATING_QUERY', { queryId, subject: subjectPubkey })) } catch (_) {}
   }
 
   const handleRatingQuery = async (fromToken, payload) => {

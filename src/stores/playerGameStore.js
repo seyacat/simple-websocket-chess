@@ -2,7 +2,7 @@
 // Maneja la vista local del juego, interacción de UI y comunicación con el host
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useConnectionStore } from './connectionStore'
 import {
   COLORS,
@@ -496,6 +496,34 @@ export const usePlayerGameStore = defineStore('playerGame', () => {
   // Inicializar al crear el store
   initializeBoard()
   initWebSocketListeners()
+
+  // Auto-solicitar estado completo cada vez que cambia el host suscrito.
+  // Cubre tanto el flujo de joinPublicGame como el manual-join del lobby:
+  // ambos terminan llamando a setSubscribedHost. Si el guest se reconecta
+  // sin que cambie el subscribedHost, el watcher no dispara y los datos
+  // siguen como estaban; en ese caso el join nuevo debe pasar por el flujo
+  // explícito de salir y volver a entrar.
+  watch(
+    () => connectionStore.subscribedHost,
+    (newHost, oldHost) => {
+      if (!newHost || newHost === oldHost) return
+      // Resetear estado local: el guest verá lo que el host le mande.
+      resetLocalGame()
+      // Esperar a estar conectado antes de pedir estado.
+      if (connectionStore.isConnected) {
+        requestFullState(newHost)
+      } else {
+        const stop = watch(
+          () => connectionStore.isConnected,
+          (connected) => {
+            if (!connected) return
+            requestFullState(newHost)
+            stop()
+          }
+        )
+      }
+    }
+  )
   
   return {
     // Estado
