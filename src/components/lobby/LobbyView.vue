@@ -24,10 +24,11 @@
               </div>
             </div>
 
-            <button 
-              @click="createGame" 
+            <button
+              @click="createGame"
               class="create-button primary-action"
               :disabled="isCreating"
+              data-testid="create-server"
             >
               <span class="button-icon">{{ isPrivateGame ? '🔐' : '🌐' }}</span>
               <span class="button-text">
@@ -47,11 +48,13 @@
               placeholder="Ingresa el token del host (ej: ABC123)"
               class="token-input"
               :disabled="isJoining"
+              data-testid="join-token-input"
             />
-            <button 
+            <button
               @click="joinWithManualToken"
               class="join-button"
               :disabled="!isValidToken(manualToken) || isJoining"
+              data-testid="join-server"
             >
               {{ isJoining ? 'Uniéndose...' : 'Unirse' }}
             </button>

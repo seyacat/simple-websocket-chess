@@ -63,6 +63,57 @@ onMounted(() => {
   connectionStore.refreshIdentity?.()
   window.addEventListener('resize', onResize)
   window.addEventListener('orientationchange', onResize)
+
+  // API global para tests automatizados (Playwright). Permite interactuar con
+  // el juego sin depender de coordenadas del canvas Phaser.
+  window.__chess = {
+    stores: {
+      connection: connectionStore,
+      game: gameStore,
+      host: hostGameStore,
+      player: playerGameStore
+    },
+    createServer(isPrivate = false) {
+      connectionStore.setMode('host', isPrivate ? 'private' : 'public')
+      return connectionStore.token
+    },
+    async joinServer(hostToken) {
+      connectionStore.setMode('guest')
+      return connectionStore.subscribeToHost(hostToken)
+    },
+    occupy(color) {
+      if (connectionStore.isHost) return hostGameStore.occupySeatAsHost(color)
+      return playerGameStore.requestSeat(color)
+    },
+    leaveSeat() {
+      if (connectionStore.isHost) return hostGameStore.leaveSeatAsHost()
+      return playerGameStore.requestLeaveSeat()
+    },
+    move(fromRow, fromCol, toRow, toCol) {
+      if (connectionStore.isHost) {
+        hostGameStore.selectPieceAsHost({ row: fromRow, col: fromCol })
+        return hostGameStore.makeMoveAsHost({ row: toRow, col: toCol })
+      } else {
+        playerGameStore.selectPiece({ row: fromRow, col: fromCol })
+        return playerGameStore.makeMove({ row: toRow, col: toCol })
+      }
+    },
+    getBoard() {
+      const store = connectionStore.isHost ? hostGameStore : playerGameStore
+      return store.board.map(r => r.map(c => c || '.').join(''))
+    },
+    getSeats() {
+      const store = connectionStore.isHost ? hostGameStore : playerGameStore
+      return JSON.parse(JSON.stringify(store.seats))
+    },
+    getTurn() { return gameStore.currentTurn },
+    getStatus() { return gameStore.gameStatus },
+    getMyToken() { return connectionStore.token },
+    getOpponentToken() { return opponentToken.value },
+    surrender() {
+      return playerGameStore.surrender ? playerGameStore.surrender() : null
+    }
+  }
 })
 
 // Computed

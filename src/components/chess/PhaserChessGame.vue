@@ -35,6 +35,36 @@
     <!-- Contenedor del juego de Phaser -->
     <div class="board-wrapper" style="order: 2;">
       <div ref="gameContainer" class="game-container"></div>
+
+      <!-- Overlay DOM del tablero para tests automatizados (Playwright).
+           Cada celda lleva data-testid="square-{r}-{c}" y data-piece, y al
+           hacer click delega en selectPiece/makeMove. Está sobre el canvas
+           pero permite los gestos touch del Phaser para usuarios reales (no
+           consume eventos cuando data-testid-board está oculto en estilos
+           normales — pointer-events: none por defecto, se activa con la
+           clase board-overlay-active). -->
+      <div
+        class="board-overlay"
+        :class="{ flipped: isFlipped }"
+        data-testid="board"
+        :data-turn="currentTurn"
+      >
+        <div
+          v-for="(row, r) in board"
+          :key="`row-${r}`"
+          class="board-row-overlay"
+        >
+          <button
+            v-for="(piece, c) in row"
+            :key="`sq-${r}-${c}`"
+            :data-testid="`square-${r}-${c}`"
+            :data-piece="piece || ''"
+            class="square-overlay"
+            tabindex="-1"
+            @click.stop="onSquareClick(r, c)"
+          >{{ piece || '' }}</button>
+        </div>
+      </div>
       
 
       
@@ -277,6 +307,14 @@ watch(() => gameStatus.value, (newStatus) => {
 function retryInitialization() {
   gameError.value = null
   initializeGame()
+}
+
+/**
+ * Click en el overlay DOM del tablero (test automation).
+ * Pasa la posición lógica al mismo handler que usa Phaser.
+ */
+function onSquareClick(row, col) {
+  handleSquareClick(row, col)
 }
 
 // Funciones de interacción con el juego
@@ -842,6 +880,49 @@ defineExpose({
   overflow: hidden;
   box-shadow: var(--shadow-md);
 }
+
+/* Overlay DOM del tablero — visible sólo a Playwright/lectores de pantalla.
+   Encima del canvas pero con pointer-events: none para no interferir con
+   los gestos del usuario. Los handlers @click siguen funcionando cuando
+   son disparados programáticamente (page.click via DOM). */
+.board-overlay {
+  position: absolute;
+  /* La grilla de Phaser tiene un margen de 24px y 8 cuadros del 100% del board.
+     El canvas ocupa todo el ancho del board-wrapper; ajustamos el inset
+     proporcionalmente para alinear con el render real. */
+  top: 24px;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  display: grid;
+  grid-template-rows: repeat(8, 1fr);
+  pointer-events: none;
+  z-index: 5;
+}
+.board-row-overlay {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+}
+.board-overlay.flipped {
+  transform: rotate(180deg);
+}
+.board-overlay.flipped .square-overlay {
+  transform: rotate(180deg);
+}
+.square-overlay {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: transparent;
+  cursor: default;
+  /* pointer-events: none → el usuario real interactúa con el canvas Phaser.
+     Tests automatizados deben llamar `element.click()` directamente vía
+     evaluate, lo que dispara el handler @click sin pasar por hit-testing. */
+  pointer-events: none;
+}
+.square-overlay:focus { outline: none; }
 
 .game-container {
   display: flex;
