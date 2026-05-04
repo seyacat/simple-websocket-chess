@@ -525,6 +525,15 @@ export const useConnectionStore = defineStore('connection', () => {
     const id = await getIdentity()
     if (!id) throw new Error('Identity vault not available')
     const updated = await id.setRating(pubkey, rating, notes)
+    // Promote rated peer to the shared contact book (id.closer.click ≥ 0.6.0)
+    // so they show up in the messenger / other apps as a known contact.
+    try {
+      const info = [...peerIdentities.value.values()].find(p => p.pubkey === pubkey)
+      const nick = info?.peer?.nickname || info?.announcedNickname || undefined
+      const enc  = info?.peer?.encryptionPubkey || undefined
+      const tk   = [...peerIdentities.value.entries()].find(([_, p]) => p.pubkey === pubkey)?.[0]
+      await id.addContact({ publickey: pubkey, nickname: nick, encryptionPubkey: enc, lastToken: tk })
+    } catch (_) {}
     for (const [t, info] of peerIdentities.value) {
       if (info.pubkey === pubkey) {
         peerIdentities.value.set(t, {
